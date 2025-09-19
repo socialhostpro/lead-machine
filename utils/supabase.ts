@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { AIInsights, Lead, LeadSource, LeadStatus, Note } from '../types';
 
-// These are now loaded securely from environment variables.
-// In a Vite-like environment, env vars are exposed on import.meta.env
-// FIX: Removed `as any` cast. Types for `import.meta.env` are now available globally.
-const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY;
+// Hardcoded values for production deployment
+// Railway environment variables are not being injected properly into the client bundle
+const supabaseUrl = 'https://xxjpzdmatqcgjxsdokou.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4anB6ZG1hdHFjZ2p4c2Rva291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NDA4MjQsImV4cCI6MjA3MzUxNjgyNH0.mFRzWP5O18B6xw65sWEbJWOufAiMZ2-ypBrMxQ4okbw';
 
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase Anon Key (first 20 chars):', supabaseAnonKey.substring(0, 20) + '...');
 
 if (!supabaseUrl || !supabaseAnonKey) {
   // In a real app, you might want to show a user-friendly message on the UI
