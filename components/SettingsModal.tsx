@@ -4,6 +4,7 @@ import { XMarkIcon, UserIcon, ArrowCounterClockwiseIcon, LightBulbIcon, CheckIco
 import ConfirmationModal from './ConfirmationModal';
 import { showTestNotification } from '../utils/notifications';
 import { sendAdminTestEmail } from '../utils/emailNotifications';
+import { getConfig } from '../utils/config';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -23,8 +24,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
   const [webhookUrl, setWebhookUrl] = useState(company.webhookUrl || '');
   const [webhookHeader, setWebhookHeader] = useState(company.webhookHeader || '');
   const [defaultAgentId, setDefaultAgentId] = useState(company.defaultAgentId || '');
-  const [emailFromAddress, setEmailFromAddress] = useState(company.emailFromAddress || 'noreply@imaginecapital.ai');
-  const [emailReplyToAddress, setEmailReplyToAddress] = useState(company.emailReplyToAddress || 'noreply@imaginecapital.ai');
+  const config = getConfig();
+  const [emailFromAddress, setEmailFromAddress] = useState(company.email_from_address || config.FROM_EMAIL);
+  const [emailReplyToAddress, setEmailReplyToAddress] = useState(company.email_reply_to_address || config.FROM_EMAIL);
   const [emailFromName, setEmailFromName] = useState(company.emailFromName || 'Lead Machine Notifications');
   const [sendgridDnsVerified, setSendgridDnsVerified] = useState(company.sendgridDnsVerified || false);
   const [inviteEmail, setInviteEmail] = useState('');

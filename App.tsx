@@ -6,7 +6,9 @@ import { useTheme } from './hooks/useTheme';
 import SettingsModal from './components/SettingsModal';
 import ProfileModal from './components/ProfileModal';
 import { requestNotificationPermission, showNewLeadNotification } from './utils/notifications';
-import { supabase, fromSupabase, toSupabase } from './utils/supabase';
+import { playNewLeadSound } from './utils/notificationSounds';
+import toast from './utils/toast';
+import { supabase, fromSupabase, toSupabase, SUPABASE_URL } from './utils/supabase';
 import { Session } from '@supabase/supabase-js';
 import Auth from './components/Auth';
 import UserManagementModal from './components/UserManagementModal';
@@ -212,7 +214,7 @@ const App: React.FC = () => {
   const fetchLeads = useCallback(async (forceRefresh = false) => {
     if (!currentCompany?.defaultAgentId) {
       if(currentCompany) {
-        alert('Please set your Default Agent ID in settings to fetch call data.');
+        toast.warning('Please set your Default Agent ID in settings to fetch call data.');
         setIsSettingsModalOpen(true);
       }
       setLeads([]);
@@ -233,6 +235,12 @@ const App: React.FC = () => {
     }
 
     setIsLeadsLoading(true);
+    
+    // Show loading toast for manual refresh
+    let loadingToast: string | null = null;
+    if (forceRefresh) {
+      loadingToast = toast.info('Refreshing leads...', { duration: 0 });
+    }
 
     try {
       // DATABASE-FIRST APPROACH: Load from database as primary source
@@ -249,7 +257,7 @@ const App: React.FC = () => {
       
       // SYNC PHASE: Check ElevenLabs API for new conversations to save to database
       try {
-        const listResponse = await fetch(`https://xxjpzdmatqcgjxsdokou.supabase.co/functions/v1/elevenlabs-conversations`, {
+        const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
             headers: { 
               'Authorization': `Bearer ${session?.access_token}`,
               'Content-Type': 'application/json'
@@ -306,6 +314,25 @@ const App: React.FC = () => {
               // Add new leads to our list (prepend so they appear at top)
               const newFrontendLeads = insertedLeads.map(fromSupabase);
               databaseLeads = [...newFrontendLeads, ...databaseLeads];
+              
+              // PLAY SOUND NOTIFICATION for new leads
+              if (newFrontendLeads.length > 0 && currentUser) {
+                const soundPreferences = {
+                  enabled: currentUser.sound_notifications_enabled ?? true,
+                  volume: currentUser.notification_volume ?? 0.7,
+                  newLeadSound: currentUser.new_lead_sound ?? 'notification',
+                  emailSound: currentUser.email_sound ?? 'email'
+                };
+                
+                // Play sound for each new lead (but don't overwhelm user)
+                if (newFrontendLeads.length === 1) {
+                  await playNewLeadSound(soundPreferences);
+                } else if (newFrontendLeads.length > 1) {
+                  // For multiple leads, play sound once then show count in console
+                  await playNewLeadSound(soundPreferences);
+                  console.log(`🔔 ${newFrontendLeads.length} new leads detected!`);
+                }
+              }
             } else if (insertError) {
               console.error('Error inserting new leads:', insertError);
             }
@@ -317,10 +344,24 @@ const App: React.FC = () => {
       
       // Set leads from database (now includes any newly synced conversations)
       setLeads(databaseLeads);
+      
+      // Show success toast for manual refresh
+      if (forceRefresh && loadingToast) {
+        toast.remove(loadingToast);
+        const newCount = databaseLeads.length;
+        toast.success(`Successfully refreshed ${newCount} leads`);
+      }
 
     } catch (error) {
         console.error("Failed to fetch leads:", error);
-        alert(`Error fetching leads: ${getSupabaseErrorMessage(error)}`);
+        
+        // Remove loading toast and show error
+        if (loadingToast) {
+          toast.remove(loadingToast);
+        }
+        
+        const errorMessage = getSupabaseErrorMessage(error);
+        toast.error(`Error refreshing leads: ${errorMessage}`);
         setLeads([]);
     } finally {
         setIsLeadsLoading(false);
@@ -365,6 +406,17 @@ const App: React.FC = () => {
       const savedLead = fromSupabase(data);
       setLeads(prev => [savedLead, ...prev]);
       showNewLeadNotification(savedLead);
+      
+      // PLAY SOUND NOTIFICATION for manually added lead
+      if (currentUser) {
+        const soundPreferences = {
+          enabled: currentUser.sound_notifications_enabled ?? true,
+          volume: currentUser.notification_volume ?? 0.7,
+          newLeadSound: currentUser.new_lead_sound ?? 'notification',
+          emailSound: currentUser.email_sound ?? 'email'
+        };
+        await playNewLeadSound(soundPreferences);
+      }
     }
   };
   
@@ -401,7 +453,7 @@ const App: React.FC = () => {
 
     try {
         if (leadToDelete.source === LeadSource.INCOMING_CALL && leadToDelete.callDetails?.conversationId) {
-            const deleteResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/elevenlabs-conversations`, {
+            const deleteResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
                 method: 'DELETE',
                 headers: { 
                   'Authorization': `Bearer ${session?.access_token}`,
@@ -511,7 +563,7 @@ const App: React.FC = () => {
     }
 
     try {
-        const response = await fetch(`${supabase.supabaseUrl}/functions/v1/send-webhook`, {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/send-webhook`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${session?.access_token}`,

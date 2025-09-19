@@ -12,6 +12,21 @@
       darkMode: 'class',
     }
   </script>
+  <style>
+    /* Toast animations */
+    .toast-item {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    .toast-item.slide-in {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    .toast-item.slide-out {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {

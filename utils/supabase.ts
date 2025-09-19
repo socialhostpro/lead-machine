@@ -1,10 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { AIInsights, Lead, LeadSource, LeadStatus, Note } from '../types';
 
-// Hardcoded values for production deployment
-// Railway environment variables are not being injected properly into the client bundle
-const supabaseUrl = 'https://xxjpzdmatqcgjxsdokou.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4anB6ZG1hdHFjZ2p4c2Rva291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NDA4MjQsImV4cCI6MjA3MzUxNjgyNH0.mFRzWP5O18B6xw65sWEbJWOufAiMZ2-ypBrMxQ4okbw';
+// Environment-aware configuration
+const getSupabaseUrl = (): string => {
+  // Try environment variables first, then fallback to hardcoded for production
+  return import.meta.env.VITE_PUBLIC_SUPABASE_URL || 
+         'https://xxjpzdmatqcgjxsdokou.supabase.co';
+};
+
+const getSupabaseAnonKey = (): string => {
+  return import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || 
+         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4anB6ZG1hdHFjZ2p4c2Rva291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NDA4MjQsImV4cCI6MjA3MzUxNjgyNH0.mFRzWP5O18B6xw65sWEbJWOufAiMZ2-ypBrMxQ4okbw';
+};
+
+const supabaseUrl = getSupabaseUrl();
+const supabaseAnonKey = getSupabaseAnonKey();
 
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase Anon Key (first 20 chars):', supabaseAnonKey.substring(0, 20) + '...');
@@ -14,6 +24,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // instead of just throwing an error, but for this context, an error is clear.
   throw new Error("Supabase URL and Anon Key must be provided in environment variables.");
 }
+
+// Export the URL for use in fetch calls
+export const SUPABASE_URL = supabaseUrl;
 
 // Define a type for our database schema to get type safety.
 // This is a simplified version. For a real app, you would generate this from your DB schema.
@@ -56,6 +69,13 @@ type ProfileRow = {
   company_id: string;
   role: string;
   is_disabled: boolean;
+  email_notifications_enabled?: boolean;
+  notification_frequency?: string;
+  notification_types?: Json;
+  sound_notifications_enabled?: boolean;
+  notification_volume?: number;
+  new_lead_sound?: string;
+  email_sound?: string;
 };
 
 type CompanyRow = {

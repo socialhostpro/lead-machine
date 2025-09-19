@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Company, User } from '../types';
 import { XMarkIcon, CheckIcon } from './icons';
+import { AVAILABLE_SOUNDS, testNotificationSound, requestNotificationPermission } from '../utils/notificationSounds';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -21,13 +22,17 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
 }) => {
   const [userName, setUserName] = useState(currentUser.name);
   const [companyData, setCompanyData] = useState(currentCompany);
-  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(currentUser.emailNotificationsEnabled ?? true);
-  const [notificationFrequency, setNotificationFrequency] = useState(currentUser.notificationFrequency ?? 'immediate');
-  const [notificationTypes, setNotificationTypes] = useState(currentUser.notificationTypes ?? {
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(currentUser.email_notifications_enabled ?? true);
+  const [notificationFrequency, setNotificationFrequency] = useState(currentUser.notification_frequency ?? 'immediate');
+  const [notificationTypes, setNotificationTypes] = useState(currentUser.notification_types ?? {
     newMessage: true,
     leadUpdates: true,
     systemAlerts: true
   });
+  const [soundNotificationsEnabled, setSoundNotificationsEnabled] = useState(currentUser.sound_notifications_enabled ?? true);
+  const [notificationVolume, setNotificationVolume] = useState(currentUser.notification_volume ?? 0.7);
+  const [newLeadSound, setNewLeadSound] = useState(currentUser.new_lead_sound ?? 'notification');
+  const [emailSound, setEmailSound] = useState(currentUser.email_sound ?? 'email');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -35,13 +40,17 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     if (isOpen) {
       setUserName(currentUser.name);
       setCompanyData(currentCompany);
-      setEmailNotificationsEnabled(currentUser.emailNotificationsEnabled ?? true);
-      setNotificationFrequency(currentUser.notificationFrequency ?? 'immediate');
-      setNotificationTypes(currentUser.notificationTypes ?? {
+      setEmailNotificationsEnabled(currentUser.email_notifications_enabled ?? true);
+      setNotificationFrequency(currentUser.notification_frequency ?? 'immediate');
+      setNotificationTypes(currentUser.notification_types ?? {
         newMessage: true,
         leadUpdates: true,
         systemAlerts: true
       });
+      setSoundNotificationsEnabled(currentUser.sound_notifications_enabled ?? true);
+      setNotificationVolume(currentUser.notification_volume ?? 0.7);
+      setNewLeadSound(currentUser.new_lead_sound ?? 'notification');
+      setEmailSound(currentUser.email_sound ?? 'email');
       setSaveState('idle');
       setErrorMessage(null);
     }
@@ -60,9 +69,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     const userToUpdate = { 
       ...currentUser, 
       name: userName,
-      emailNotificationsEnabled,
-      notificationFrequency,
-      notificationTypes
+      email_notifications_enabled: emailNotificationsEnabled,
+      notification_frequency: notificationFrequency,
+      notification_types: notificationTypes,
+      sound_notifications_enabled: soundNotificationsEnabled,
+      notification_volume: notificationVolume,
+      new_lead_sound: newLeadSound,
+      email_sound: emailSound
     };
     
     const [userResult, companyResult] = await Promise.all([
@@ -87,7 +100,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 transition-opacity">
       <div className="bg-slate-100 dark:bg-slate-800 rounded-lg shadow-xl p-6 md:p-8 w-full max-w-2xl m-4 relative animate-fade-in-up text-slate-800 dark:text-white">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" title="Close Profile Settings">
           <XMarkIcon className="w-6 h-6" />
         </button>
         <h2 className="text-2xl font-bold mb-6">My Profile</h2>
@@ -188,6 +201,105 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                                         </label>
                                     </div>
                                 </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Sound Notification Settings */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-2">Sound Notifications</h3>
+                
+                <div className="space-y-4">
+                    <div className="flex items-center">
+                        <input
+                            type="checkbox"
+                            id="soundNotificationsEnabled"
+                            checked={soundNotificationsEnabled}
+                            onChange={(e) => setSoundNotificationsEnabled(e.target.checked)}
+                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                        />
+                        <label htmlFor="soundNotificationsEnabled" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                            Enable Sound Notifications
+                        </label>
+                    </div>
+
+                    {soundNotificationsEnabled && (
+                        <>
+                            <div>
+                                <label htmlFor="notificationVolume" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Volume: {Math.round(notificationVolume * 100)}%
+                                </label>
+                                <input
+                                    type="range"
+                                    id="notificationVolume"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value={notificationVolume}
+                                    onChange={(e) => setNotificationVolume(parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="newLeadSound" className="block text-sm font-medium text-slate-700 dark:text-slate-300">New Lead Sound</label>
+                                <div className="flex gap-2 mt-1">
+                                    <select
+                                        id="newLeadSound"
+                                        value={newLeadSound}
+                                        onChange={(e) => setNewLeadSound(e.target.value)}
+                                        className="flex-1 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                    >
+                                        {Object.entries(AVAILABLE_SOUNDS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => testNotificationSound(newLeadSound as any, notificationVolume)}
+                                        className="px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white text-sm rounded-md transition-colors"
+                                        title="Test sound"
+                                    >
+                                        Test
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="emailSound" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Notification Sound</label>
+                                <div className="flex gap-2 mt-1">
+                                    <select
+                                        id="emailSound"
+                                        value={emailSound}
+                                        onChange={(e) => setEmailSound(e.target.value)}
+                                        className="flex-1 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                    >
+                                        {Object.entries(AVAILABLE_SOUNDS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => testNotificationSound(emailSound as any, notificationVolume)}
+                                        className="px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white text-sm rounded-md transition-colors"
+                                        title="Test sound"
+                                    >
+                                        Test
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                                <p>📢 Sound notifications require browser permission. Click test to enable.</p>
+                                <button
+                                    type="button"
+                                    onClick={requestNotificationPermission}
+                                    className="text-teal-600 dark:text-teal-400 hover:underline"
+                                >
+                                    Request notification permission
+                                </button>
                             </div>
                         </>
                     )}

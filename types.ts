@@ -93,6 +93,10 @@ export interface User {
         leadUpdates: boolean;
         systemAlerts: boolean;
     };
+    sound_notifications_enabled?: boolean;     // FIXED: snake_case to match database
+    notification_volume?: number;              // FIXED: snake_case to match database
+    new_lead_sound?: string;                   // FIXED: snake_case to match database
+    email_sound?: string;                      // FIXED: snake_case to match database
 }
 
 export interface WebFormField {
