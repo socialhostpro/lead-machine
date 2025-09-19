@@ -1,9 +1,9 @@
 // Lead Machine Service Worker
 // Handles offline functionality, caching, and background sync
 
-const CACHE_NAME = 'lead-machine-v1.0.0';
-const STATIC_CACHE_NAME = 'lead-machine-static-v1.0.0';
-const DYNAMIC_CACHE_NAME = 'lead-machine-dynamic-v1.0.0';
+const CACHE_NAME = 'lead-machine-v1.1.0';
+const STATIC_CACHE_NAME = 'lead-machine-static-v1.1.0';
+const DYNAMIC_CACHE_NAME = 'lead-machine-dynamic-v1.1.0';
 
 // Files to cache immediately (critical app shell)
 const STATIC_ASSETS = [
@@ -16,10 +16,10 @@ const STATIC_ASSETS = [
   // Tailwind CSS and other external resources will be cached dynamically
 ];
 
-// API endpoints to cache
+// API endpoints to cache (EXCLUDING Edge Functions)
 const API_CACHE_PATTERNS = [
   /^https:\/\/.*\.supabase\.co\/rest\/v1\//,
-  /^https:\/\/.*\.supabase\.co\/functions\/v1\//,
+  // Removed functions/v1/ to prevent CORS issues
 ];
 
 // Background sync tags
