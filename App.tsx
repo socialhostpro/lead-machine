@@ -233,6 +233,38 @@ const App: React.FC = () => {
     if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
       console.log('Using cached leads data');
       setIsLeadsLoading(false);
+      
+      // STILL DO ELEVENLABS SYNC even with cached data
+      try {
+        console.log('🔄 Starting ElevenLabs sync (cached mode)...');
+        const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
+            headers: { 
+              'Authorization': `Bearer ${session?.access_token}`,
+              'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('📡 ElevenLabs API response status:', listResponse.status);
+        
+        if (listResponse.ok) {
+          const elevenLabsData = await listResponse.json();
+          console.log('📊 ElevenLabs data received:', elevenLabsData);
+          const conversations = elevenLabsData.conversations || [];
+          console.log(`📞 Found ${conversations.length} conversations from ElevenLabs`);
+          
+          if (conversations.length > 0) {
+            // If we found new conversations, do a full refresh
+            console.log('🆕 New conversations found, doing full refresh...');
+            fetchLeads(true); // Force refresh to process new conversations
+          }
+        } else {
+          const errorData = await listResponse.text();
+          console.error(`🚨 ElevenLabs API error (${listResponse.status}):`, errorData);
+        }
+      } catch (apiError) {
+        console.error('🚨 ElevenLabs API sync failed (cached mode):', apiError);
+      }
+      
       return;
     }
 
