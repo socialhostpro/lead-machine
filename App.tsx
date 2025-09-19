@@ -238,6 +238,123 @@ const App: React.FC = () => {
   
   const currentCompany = useMemo(() => companies.find(c => c.id === currentCompanyId), [companies, currentCompanyId]);
   
+  // Background ElevenLabs sync - runs independently of main fetch
+  const syncElevenLabsInBackground = useCallback(async () => {
+    if (!session || !currentCompany) return;
+    
+    try {
+      console.log('🔄 Background ElevenLabs sync started...');
+      const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
+          headers: { 
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json'
+          }
+      });
+      
+      if (listResponse.ok) {
+        const elevenLabsData = await listResponse.json();
+        const conversations = elevenLabsData.conversations || [];
+        console.log(`📞 Background sync found ${conversations.length} conversations`);
+        
+        // Get current database leads to check for new ones
+        const { data: databaseLeads } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('company_id', currentCompany.id)
+          .order('created_at', { ascending: false });
+        
+        const existingConversationIds = new Set(
+          (databaseLeads || [])
+            .filter(l => l.source === LeadSource.INCOMING_CALL && l.source_conversation_id)
+            .map(l => l.source_conversation_id)
+        );
+        
+        const newConversations = conversations.filter((conv: any) => 
+          !existingConversationIds.has(conv.conversation_id)
+        );
+        
+        if (newConversations.length > 0) {
+          console.log(`💾 Saving ${newConversations.length} new conversations to database`);
+          
+          const newLeadsData = newConversations.map((conv: any) => {
+            const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
+              companyId: currentCompany.id,
+              firstName: 'Unknown',
+              lastName: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+              company: '',
+              email: `${conv.conversation_id}@imported-lead.com`,
+              phone: 'N/A',
+              status: LeadStatus.NEW,
+              notes: [],
+              source: LeadSource.INCOMING_CALL,
+              callDetails: {
+                conversationId: conv.conversation_id,
+                summaryTitle: 'ElevenLabs Conversation',
+                transcriptSummary: conv.transcript_summary || 'ElevenLabs conversation'
+              },
+              issueDescription: conv.transcript_summary || 'ElevenLabs conversation',
+              hasAudio: conv.has_audio || false,
+              aiInsights: null
+            };
+            return toSupabase(leadForConversion);
+          });
+          
+          const { data: insertedLeads, error: insertError } = await supabase
+            .from('leads')
+            .insert(newLeadsData)
+            .select();
+          
+          if (!insertError && insertedLeads) {
+            console.log(`✅ Successfully saved ${insertedLeads.length} new leads to database`);
+            
+            // Update UI with new leads if currently viewing leads
+            const newFrontendLeads = insertedLeads.map(fromSupabase);
+            setLeads(prev => [...newFrontendLeads, ...prev]);
+            
+            // Play sound notification
+            if (currentUser) {
+              const soundPreferences = {
+                enabled: currentUser.sound_notifications_enabled ?? true,
+                volume: currentUser.notification_volume ?? 0.7,
+                newLeadSound: currentUser.new_lead_sound ?? 'notification',
+                emailSound: currentUser.email_sound ?? 'email'
+              };
+              
+              if (newFrontendLeads.length === 1) {
+                await playNewLeadSound(soundPreferences);
+              } else if (newFrontendLeads.length > 1) {
+                await playNewLeadSound(soundPreferences);
+                console.log(`🔔 ${newFrontendLeads.length} new leads detected!`);
+              }
+            }
+          } else if (insertError) {
+            console.error('❌ Error saving new leads:', insertError);
+          }
+        } else {
+          console.log('✅ No new conversations found');
+        }
+      } else {
+        const errorData = await listResponse.text();
+        console.error(`🚨 Background ElevenLabs sync error (${listResponse.status}):`, errorData);
+      }
+    } catch (error) {
+      console.error('🚨 Background ElevenLabs sync failed:', error);
+    }
+  }, [session, currentCompany, currentUser]);
+
+  // Set up background sync interval (every 5 minutes)
+  useEffect(() => {
+    if (!session || !currentCompany) return;
+    
+    // Run initial background sync
+    syncElevenLabsInBackground();
+    
+    // Set up interval for background sync
+    const syncInterval = setInterval(syncElevenLabsInBackground, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearInterval(syncInterval);
+  }, [syncElevenLabsInBackground, session, currentCompany]);
+
   const fetchLeads = useCallback(async (forceRefresh = false) => {
     if (!currentCompany?.defaultAgentId) {
       if(currentCompany) {
@@ -249,47 +366,15 @@ const App: React.FC = () => {
       return;
     }
 
-    // Check cache freshness (30 seconds for testing)
+    // Check cache freshness (5 minutes)
     const cacheKey = `leads-last-fetch-${currentCompany.id}`;
     const lastFetchTime = localStorage.getItem(cacheKey);
     const now = Date.now();
-    const CACHE_DURATION = 30 * 1000; // 30 seconds for testing
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
     
     if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
-      console.log('Using cached leads data');
+      console.log('Using cached leads data (background sync handles ElevenLabs)');
       setIsLeadsLoading(false);
-      
-      // STILL DO ELEVENLABS SYNC even with cached data
-      try {
-        console.log('🔄 Starting ElevenLabs sync (cached mode)...');
-        const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
-            headers: { 
-              'Authorization': `Bearer ${session?.access_token}`,
-              'Content-Type': 'application/json'
-            }
-        });
-        
-        console.log('📡 ElevenLabs API response status:', listResponse.status);
-        
-        if (listResponse.ok) {
-          const elevenLabsData = await listResponse.json();
-          console.log('📊 ElevenLabs data received:', elevenLabsData);
-          const conversations = elevenLabsData.conversations || [];
-          console.log(`📞 Found ${conversations.length} conversations from ElevenLabs`);
-          
-          if (conversations.length > 0) {
-            // If we found new conversations, do a full refresh
-            console.log('🆕 New conversations found, doing full refresh...');
-            fetchLeads(true); // Force refresh to process new conversations
-          }
-        } else {
-          const errorData = await listResponse.text();
-          console.error(`🚨 ElevenLabs API error (${listResponse.status}):`, errorData);
-        }
-      } catch (apiError) {
-        console.error('🚨 ElevenLabs API sync failed (cached mode):', apiError);
-      }
-      
       return;
     }
 
