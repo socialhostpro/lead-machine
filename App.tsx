@@ -259,6 +259,7 @@ const App: React.FC = () => {
       
       // SYNC PHASE: Check ElevenLabs API for new conversations to save to database
       try {
+        console.log('🔄 Starting ElevenLabs sync...');
         const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
             headers: { 
               'Authorization': `Bearer ${session?.access_token}`,
@@ -266,9 +267,13 @@ const App: React.FC = () => {
             }
         });
         
+        console.log('📡 ElevenLabs API response status:', listResponse.status);
+        
         if (listResponse.ok) {
           const elevenLabsData = await listResponse.json();
+          console.log('📊 ElevenLabs data received:', elevenLabsData);
           const conversations = elevenLabsData.conversations || [];
+          console.log(`📞 Found ${conversations.length} conversations from ElevenLabs`);
           
           // Create map of existing conversation IDs in database
           const existingConversationIds = new Set(
@@ -276,6 +281,8 @@ const App: React.FC = () => {
               .filter(l => l.source === LeadSource.INCOMING_CALL && l.callDetails?.conversationId)
               .map(l => l.callDetails?.conversationId)
           );
+          
+          console.log('💾 Existing conversation IDs in database:', Array.from(existingConversationIds));
           
           // Find new conversations not in database
           const newConversations = conversations.filter((conv: any) => 
@@ -341,8 +348,13 @@ const App: React.FC = () => {
               console.error('Error inserting new leads:', insertError);
             }
           }
+        } else {
+          // Handle non-ok response
+          const errorData = await listResponse.text();
+          console.error(`🚨 ElevenLabs API error (${listResponse.status}):`, errorData);
         }
       } catch (apiError) {
+        console.error('🚨 ElevenLabs API sync failed:', apiError);
         console.warn('ElevenLabs API sync failed, using database data only:', apiError);
       }
       
