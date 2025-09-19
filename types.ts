@@ -40,6 +40,12 @@ export interface Company {
   city?: string;
   state?: string;
   zipCode?: string;
+  emailFromAddress?: string;
+  emailReplyToAddress?: string;
+  emailFromName?: string;
+  sendgridDnsVerified?: boolean;
+  lastSyncTimestamp?: string;
+  lastConversationId?: string;
 }
 
 export interface AIInsights {
@@ -80,6 +86,13 @@ export interface User {
     companyId: string;
     role: UserRole;
     isDisabled?: boolean;
+    emailNotificationsEnabled?: boolean;
+    notificationFrequency?: 'immediate' | 'hourly' | 'daily' | 'disabled';
+    notificationTypes?: {
+        newMessage: boolean;
+        leadUpdates: boolean;
+        systemAlerts: boolean;
+    };
 }
 
 export interface WebFormField {

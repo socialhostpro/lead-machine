@@ -48,7 +48,8 @@ export async function sendNewMessageNotification(
           timestamp: new Date().toISOString(),
           companyName: (lead.company as any)?.name || 'Unknown Company'
         },
-        recipientEmails: adminEmails
+        recipientEmails: adminEmails,
+        companyId: lead.company_id
       }
     });
 
@@ -83,7 +84,8 @@ export async function sendTestEmailNotification(
           timestamp: new Date().toISOString(),
           companyName: 'Test Company'
         },
-        recipientEmails: adminEmails
+        recipientEmails: adminEmails,
+        companyId: null // Use default settings for test
       }
     });
 
@@ -134,7 +136,8 @@ export async function sendMultipleMessagesNotification(
           leads: recentLeads,
           companyName: company.name
         },
-        recipientEmails: adminEmails
+        recipientEmails: adminEmails,
+        companyId: companyId
       }
     });
 

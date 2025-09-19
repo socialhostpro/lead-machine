@@ -21,6 +21,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
 }) => {
   const [userName, setUserName] = useState(currentUser.name);
   const [companyData, setCompanyData] = useState(currentCompany);
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(currentUser.emailNotificationsEnabled ?? true);
+  const [notificationFrequency, setNotificationFrequency] = useState(currentUser.notificationFrequency ?? 'immediate');
+  const [notificationTypes, setNotificationTypes] = useState(currentUser.notificationTypes ?? {
+    newMessage: true,
+    leadUpdates: true,
+    systemAlerts: true
+  });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -28,6 +35,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     if (isOpen) {
       setUserName(currentUser.name);
       setCompanyData(currentCompany);
+      setEmailNotificationsEnabled(currentUser.emailNotificationsEnabled ?? true);
+      setNotificationFrequency(currentUser.notificationFrequency ?? 'immediate');
+      setNotificationTypes(currentUser.notificationTypes ?? {
+        newMessage: true,
+        leadUpdates: true,
+        systemAlerts: true
+      });
       setSaveState('idle');
       setErrorMessage(null);
     }
@@ -43,7 +57,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     setSaveState('saving');
     setErrorMessage(null);
     
-    const userToUpdate = { ...currentUser, name: userName };
+    const userToUpdate = { 
+      ...currentUser, 
+      name: userName,
+      emailNotificationsEnabled,
+      notificationFrequency,
+      notificationTypes
+    };
     
     const [userResult, companyResult] = await Promise.all([
       onSaveUser(userToUpdate),
@@ -91,6 +111,87 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{currentUser.email}</p>
                  </div>
+            </div>
+
+            {/* Notification Preferences Section */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-2">Notification Preferences</h3>
+                
+                <div className="space-y-4">
+                    <div className="flex items-center">
+                        <input
+                            type="checkbox"
+                            id="emailNotificationsEnabled"
+                            checked={emailNotificationsEnabled}
+                            onChange={(e) => setEmailNotificationsEnabled(e.target.checked)}
+                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                        />
+                        <label htmlFor="emailNotificationsEnabled" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                            Enable Email Notifications
+                        </label>
+                    </div>
+
+                    {emailNotificationsEnabled && (
+                        <>
+                            <div>
+                                <label htmlFor="notificationFrequency" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Notification Frequency</label>
+                                <select
+                                    id="notificationFrequency"
+                                    value={notificationFrequency}
+                                    onChange={(e) => setNotificationFrequency(e.target.value as any)}
+                                    className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                >
+                                    <option value="immediate">Immediate</option>
+                                    <option value="hourly">Hourly Digest</option>
+                                    <option value="daily">Daily Digest</option>
+                                    <option value="disabled">Disabled</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Notification Types</label>
+                                <div className="space-y-2">
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="newMessage"
+                                            checked={notificationTypes.newMessage}
+                                            onChange={(e) => setNotificationTypes(prev => ({ ...prev, newMessage: e.target.checked }))}
+                                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                                        />
+                                        <label htmlFor="newMessage" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                                            New Messages from Leads
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="leadUpdates"
+                                            checked={notificationTypes.leadUpdates}
+                                            onChange={(e) => setNotificationTypes(prev => ({ ...prev, leadUpdates: e.target.checked }))}
+                                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                                        />
+                                        <label htmlFor="leadUpdates" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                                            Lead Status Updates
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="systemAlerts"
+                                            checked={notificationTypes.systemAlerts}
+                                            onChange={(e) => setNotificationTypes(prev => ({ ...prev, systemAlerts: e.target.checked }))}
+                                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                                        />
+                                        <label htmlFor="systemAlerts" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                                            System Alerts
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Company Information Section */}

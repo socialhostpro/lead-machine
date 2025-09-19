@@ -23,6 +23,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
   const [webhookUrl, setWebhookUrl] = useState(company.webhookUrl || '');
   const [webhookHeader, setWebhookHeader] = useState(company.webhookHeader || '');
   const [defaultAgentId, setDefaultAgentId] = useState(company.defaultAgentId || '');
+  const [emailFromAddress, setEmailFromAddress] = useState(company.emailFromAddress || 'noreply@imaginecapital.ai');
+  const [emailReplyToAddress, setEmailReplyToAddress] = useState(company.emailReplyToAddress || 'noreply@imaginecapital.ai');
+  const [emailFromName, setEmailFromName] = useState(company.emailFromName || 'Lead Machine Notifications');
+  const [sendgridDnsVerified, setSendgridDnsVerified] = useState(company.sendgridDnsVerified || false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isResetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -35,6 +39,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
         setWebhookUrl(company.webhookUrl || '');
         setWebhookHeader(company.webhookHeader || '');
         setDefaultAgentId(company.defaultAgentId || '');
+        setEmailFromAddress(company.emailFromAddress || 'noreply@imaginecapital.ai');
+        setEmailReplyToAddress(company.emailReplyToAddress || 'noreply@imaginecapital.ai');
+        setEmailFromName(company.emailFromName || 'Lead Machine Notifications');
+        setSendgridDnsVerified(company.sendgridDnsVerified || false);
         setSaveState('idle');
         setErrorMessage(null);
     }
@@ -46,7 +54,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
     e.preventDefault();
     setSaveState('saving');
     setErrorMessage(null);
-    const result = await onUpdateCompany({ ...company, webhookUrl, webhookHeader, defaultAgentId });
+    const result = await onUpdateCompany({ 
+      ...company, 
+      webhookUrl, 
+      webhookHeader, 
+      defaultAgentId,
+      emailFromAddress,
+      emailReplyToAddress,
+      emailFromName,
+      sendgridDnsVerified
+    });
     
     if (result.success) {
       setSaveState('saved');
@@ -198,6 +215,74 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                   required
                               />
                               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">The agent ID used to fetch conversations from ElevenLabs.</p>
+                          </div>
+                          <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                            <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">Email Notification Settings</h3>
+                            
+                            <div className="mt-4 space-y-4">
+                                <div>
+                                    <label htmlFor="emailFromAddress" className="block text-sm font-medium text-slate-700 dark:text-slate-300">From Email Address</label>
+                                    <input
+                                        type="email"
+                                        id="emailFromAddress"
+                                        value={emailFromAddress}
+                                        onChange={e => setEmailFromAddress(e.target.value)}
+                                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                        placeholder="noreply@imaginecapital.ai"
+                                        required
+                                    />
+                                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                        {sendgridDnsVerified ? 
+                                            "Custom domain verified - using your domain" : 
+                                            "Using default domain (noreply@imaginecapital.ai)"
+                                        }
+                                    </p>
+                                </div>
+                                
+                                <div>
+                                    <label htmlFor="emailReplyToAddress" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Reply-To Email Address</label>
+                                    <input
+                                        type="email"
+                                        id="emailReplyToAddress"
+                                        value={emailReplyToAddress}
+                                        onChange={e => setEmailReplyToAddress(e.target.value)}
+                                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                        placeholder="noreply@imaginecapital.ai"
+                                        required
+                                    />
+                                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Email address for replies to notifications.</p>
+                                </div>
+                                
+                                <div>
+                                    <label htmlFor="emailFromName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">From Name</label>
+                                    <input
+                                        type="text"
+                                        id="emailFromName"
+                                        value={emailFromName}
+                                        onChange={e => setEmailFromName(e.target.value)}
+                                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                        placeholder="Lead Machine Notifications"
+                                        required
+                                    />
+                                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Display name for email notifications.</p>
+                                </div>
+                                
+                                <div className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id="sendgridDnsVerified"
+                                        checked={sendgridDnsVerified}
+                                        onChange={e => setSendgridDnsVerified(e.target.checked)}
+                                        className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                                    />
+                                    <label htmlFor="sendgridDnsVerified" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                                        SendGrid DNS Verified (Custom Domain)
+                                    </label>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Check this box if you have set up custom domain authentication with SendGrid.
+                                </p>
+                            </div>
                           </div>
                           <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
                             <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">Webhook Settings</h3>
