@@ -40,12 +40,12 @@ export interface Company {
   city?: string;
   state?: string;
   zipCode?: string;
-  emailFromAddress?: string;
-  emailReplyToAddress?: string;
-  emailFromName?: string;
-  sendgridDnsVerified?: boolean;
-  lastSyncTimestamp?: string;
-  lastConversationId?: string;
+  email_from_address?: string;        // FIXED: snake_case to match database
+  email_reply_to_address?: string;    // FIXED: snake_case to match database
+  email_from_name?: string;           // FIXED: snake_case to match database
+  sendgrid_dns_verified?: boolean;    // FIXED: snake_case to match database
+  last_sync_timestamp?: string;       // FIXED: snake_case to match database
+  last_conversation_id?: string;      // FIXED: snake_case to match database
 }
 
 export interface AIInsights {
@@ -86,9 +86,9 @@ export interface User {
     companyId: string;
     role: UserRole;
     isDisabled?: boolean;
-    emailNotificationsEnabled?: boolean;
-    notificationFrequency?: 'immediate' | 'hourly' | 'daily' | 'disabled';
-    notificationTypes?: {
+    email_notifications_enabled?: boolean;     // FIXED: snake_case to match database
+    notification_frequency?: 'immediate' | 'hourly' | 'daily' | 'disabled';  // FIXED: snake_case
+    notification_types?: {                     // FIXED: snake_case to match database
         newMessage: boolean;
         leadUpdates: boolean;
         systemAlerts: boolean;
