@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d9488;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f766e;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#grad)"/>
+  
+  <!-- Lead Machine icon - simplified chart/graph -->
+  <g transform="translate(102.4, 102.4)">
+    <!-- Chart bars -->
+    <rect x="51.2" y="204.8" width="40.96" height="102.4" fill="white" opacity="0.9"/>
+    <rect x="128" y="153.6" width="40.96" height="153.6" fill="white" opacity="0.9"/>
+    <rect x="204.8" y="102.4" width="40.96" height="204.8" fill="white" opacity="0.9"/>
+    
+    <!-- Connecting line -->
+    <path d="M71.68 230.4 L148.48 179.2 L225.28 128" 
+          stroke="white" stroke-width="2" fill="none" opacity="0.8"/>
+    
+    <!-- Growth arrow -->
+    <path d="M194.56 153.6 L230.4 117.76 L230.4 153.6 Z" 
+          fill="white" opacity="0.8"/>
+  </g>
+  
+  <!-- Text (for larger icons) -->
+  
+  <text x="256" y="435.2" text-anchor="middle" fill="white" 
+        font-family="Arial, sans-serif" font-size="40.96" font-weight="bold">
+    LEAD
+  </text>
+</svg>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Machine - Offline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .offline-container {
+            text-align: center;
+            max-width: 400px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px 30px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        
+        .offline-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, #0d9488, #0f766e);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s infinite;
+        }
+        
+        .offline-icon svg {
+            width: 40px;
+            height: 40px;
+            color: white;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .offline-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #f1f5f9;
+        }
+        
+        .offline-message {
+            font-size: 16px;
+            color: #94a3b8;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .offline-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+            font-size: 16px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #0d9488, #0f766e);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(148, 163, 184, 0.1);
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(148, 163, 184, 0.2);
+        }
+        
+        .network-status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-offline {
+            background: #ef4444;
+        }
+        
+        .status-online {
+            background: #10b981;
+        }
+        
+        @media (max-width: 480px) {
+            .offline-container {
+                padding: 30px 20px;
+            }
+            
+            .offline-title {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+            </svg>
+        </div>
+        
+        <h1 class="offline-title">You're Offline</h1>
+        <p class="offline-message">
+            Lead Machine is currently unavailable. Some features may still work with cached data.
+            Check your internet connection and try again.
+        </p>
+        
+        <div class="offline-actions">
+            <button class="btn btn-primary" onclick="location.reload()">
+                Try Again
+            </button>
+            <button class="btn btn-secondary" onclick="goHome()">
+                Go to Homepage
+            </button>
+        </div>
+        
+        <div class="network-status">
+            <span class="status-indicator status-offline" id="status-indicator"></span>
+            <span id="network-status">Checking connection...</span>
+        </div>
+    </div>
+
+    <script>
+        // Network status monitoring
+        function updateNetworkStatus() {
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('network-status');
+            
+            if (navigator.onLine) {
+                statusIndicator.className = 'status-indicator status-online';
+                statusText.textContent = 'Back online! You can reload now.';
+                
+                // Auto-reload after 2 seconds when back online
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'No internet connection detected';
+            }
+        }
+        
+        function goHome() {
+            window.location.href = '/';
+        }
+        
+        // Initial status check
+        updateNetworkStatus();
+        
+        // Listen for network changes
+        window.addEventListener('online', updateNetworkStatus);
+        window.addEventListener('offline', updateNetworkStatus);
+        
+        // Periodic connectivity check
+        setInterval(() => {
+            // Try to fetch a small resource to verify connectivity
+            fetch('/manifest.json', { 
+                method: 'HEAD',
+                cache: 'no-cache'
+            })
+            .then(() => {
+                if (!navigator.onLine) {
+                    // Force online status update
+                    updateNetworkStatus();
+                }
+            })
+            .catch(() => {
+                // Still offline
+            });
+        }, 5000);
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                location.reload();
+            } else if (e.key === 'Escape') {
+                goHome();
+            }
+        });
+    </script>
+</body>
+</html>

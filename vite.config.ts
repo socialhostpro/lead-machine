@@ -10,6 +10,22 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      build: {
+        // PWA optimizations
+        manifest: true,
+        rollupOptions: {
+          output: {
+            // Create separate chunks for better caching
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+              supabase: ['@supabase/supabase-js'],
+              utils: ['./utils/supabase', './utils/notifications', './utils/toast', './utils/pwa']
+            }
+          }
+        },
+        // Enable source maps for better debugging in production
+        sourcemap: true,
+      },
       preview: {
         host: '0.0.0.0',
         port: 3000,
