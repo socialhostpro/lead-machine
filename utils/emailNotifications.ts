@@ -73,16 +73,13 @@ export async function sendTestEmailNotification(
   adminEmails: string[]
 ): Promise<boolean> {
   try {
-    // Call the sendgrid-notifications Edge Function with test data
+    // Call the sendgrid-notifications Edge Function with proper test_email type
     const { data, error } = await supabase.functions.invoke('sendgrid-notifications', {
       body: {
-        type: 'new_message',
+        type: 'test_email',
         messageData: {
-          leadName: 'Test Lead',
-          leadEmail: 'test@example.com',
-          message: messageContent,
-          timestamp: new Date().toISOString(),
-          companyName: 'Test Company'
+          testMessage: messageContent,
+          adminEmail: adminEmails[0] // Primary admin email for test
         },
         recipientEmails: adminEmails,
         companyId: null // Use default settings for test
@@ -99,6 +96,39 @@ export async function sendTestEmailNotification(
 
   } catch (error) {
     console.error('Error in sendTestEmailNotification:', error);
+    return false;
+  }
+}
+
+// Dedicated function for admin test emails from settings
+export async function sendAdminTestEmail(
+  adminEmails: string[],
+  companyId?: string
+): Promise<boolean> {
+  try {
+    // Call the sendgrid-notifications Edge Function with proper test_email type
+    const { data, error } = await supabase.functions.invoke('sendgrid-notifications', {
+      body: {
+        type: 'test_email',
+        messageData: {
+          testMessage: 'This is a test email from your Lead Machine settings. If you received this email, your SendGrid configuration is working correctly!',
+          adminEmail: adminEmails[0] // Primary admin email for test
+        },
+        recipientEmails: adminEmails,
+        companyId: companyId || null // Use company settings if available
+      }
+    });
+
+    if (error) {
+      console.error('Error sending admin test email:', error);
+      return false;
+    }
+
+    console.log('Admin test email sent successfully:', data);
+    return true;
+
+  } catch (error) {
+    console.error('Error in sendAdminTestEmail:', error);
     return false;
   }
 }

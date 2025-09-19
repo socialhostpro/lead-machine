@@ -3,7 +3,7 @@ import { Company, User, UserRole } from '../types';
 import { XMarkIcon, UserIcon, ArrowCounterClockwiseIcon, LightBulbIcon, CheckIcon } from './icons';
 import ConfirmationModal from './ConfirmationModal';
 import { showTestNotification } from '../utils/notifications';
-import { sendNewMessageNotification } from '../utils/emailNotifications';
+import { sendAdminTestEmail } from '../utils/emailNotifications';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -100,12 +100,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
       
       const adminEmails = adminUsers.map(user => user.email);
       
-      // Send test email notification
-      const success = await sendNewMessageNotification(
-        'test-lead-id',
-        'This is a test email notification from your Lead Machine dashboard. If you received this email, your email notifications are working correctly!',
-        adminEmails
-      );
+      // Send test email notification using dedicated test function
+      const success = await sendAdminTestEmail(adminEmails, company.id);
       
       if (success) {
         setEmailTestResult('success');
