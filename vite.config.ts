@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
             manualChunks: {
               vendor: ['react', 'react-dom'],
               supabase: ['@supabase/supabase-js'],
-              utils: ['./utils/supabase', './utils/notifications', './utils/toast', './utils/pwa']
+              utils: ['./utils/supabase', './utils/notifications', './utils/toast']
             }
           }
         },

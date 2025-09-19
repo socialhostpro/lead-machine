@@ -8,7 +8,6 @@ import ProfileModal from './components/ProfileModal';
 import { requestNotificationPermission, showNewLeadNotification } from './utils/notifications';
 import { playNewLeadSound } from './utils/notificationSounds';
 import toast from './utils/toast';
-import { initializePWA } from './utils/pwa';
 import { supabase, fromSupabase, toSupabase, SUPABASE_URL } from './utils/supabase';
 import { Session } from '@supabase/supabase-js';
 import Auth from './components/Auth';
@@ -126,43 +125,6 @@ const App: React.FC = () => {
   // const elevenLabsApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY; // Removed - now using Edge Functions
 
   useEffect(() => {
-    // Initialize PWA functionality
-    initializePWA({
-      enableNotifications: true,
-      enableOffline: true,
-      enableBackground: true,
-      updateCheckInterval: 30000
-    });
-
-    // Handle PWA shortcuts
-    const handlePWAShortcut = (event: CustomEvent) => {
-      const { action } = event.detail;
-      switch (action) {
-        case 'add-lead':
-          setNewLeadModalOpen(true);
-          break;
-        case 'settings':
-          setIsSettingsModalOpen(true);
-          break;
-        default:
-          console.log('Unknown PWA shortcut action:', action);
-      }
-    };
-
-    window.addEventListener('pwa-shortcut', handlePWAShortcut as EventListener);
-    
-    // Handle offline status changes
-    const handleOfflineStatus = (event: CustomEvent) => {
-      const { isOffline } = event.detail;
-      if (isOffline) {
-        toast.warning('You are offline. Some features may be limited.', { duration: 5000 });
-      } else {
-        toast.success('You are back online!');
-      }
-    };
-
-    window.addEventListener('pwa-offline-status', handleOfflineStatus as EventListener);
-
     requestNotificationPermission();
 
     // Handle Auth changes
@@ -178,8 +140,6 @@ const App: React.FC = () => {
 
     return () => {
       subscription.unsubscribe();
-      window.removeEventListener('pwa-shortcut', handlePWAShortcut as EventListener);
-      window.removeEventListener('pwa-offline-status', handleOfflineStatus as EventListener);
     };
   }, []);
 
