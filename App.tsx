@@ -163,7 +163,22 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // CRITICAL: Unregister any existing service workers to prevent CORS issues
+    // Make cache clearing available globally for debugging
+  useEffect(() => {
+    (window as any).clearLeadsCache = () => {
+      const cacheKey = `leads-last-fetch-${currentCompany?.id}`;
+      localStorage.removeItem(cacheKey);
+      localStorage.removeItem('leads-cache');
+      console.log('🗑️ Leads cache cleared! Refresh to fetch new data.');
+    };
+    (window as any).forceRefreshLeads = () => {
+      if (currentCompany) {
+        fetchLeads(true);
+      }
+    };
+  }, [currentCompany, fetchLeads]);
+
+  // CRITICAL: Unregister any existing service workers to prevent CORS issues
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         for(let registration of registrations) {
@@ -234,11 +249,11 @@ const App: React.FC = () => {
       return;
     }
 
-    // Check cache freshness (5 minutes)
+    // Check cache freshness (30 seconds for testing)
     const cacheKey = `leads-last-fetch-${currentCompany.id}`;
     const lastFetchTime = localStorage.getItem(cacheKey);
     const now = Date.now();
-    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    const CACHE_DURATION = 30 * 1000; // 30 seconds for testing
     
     if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
       console.log('Using cached leads data');
