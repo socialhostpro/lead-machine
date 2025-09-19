@@ -11,10 +11,14 @@ export default defineConfig(({ mode }) => {
         }
       },
       build: {
-        // PWA optimizations
-        manifest: true,
+        // AGGRESSIVE CACHE BUSTING - NO CACHING ALLOWED
+        manifest: false,
         rollupOptions: {
           output: {
+            // Force unique file names every build
+            entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
+            chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
+            assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`,
             // Create separate chunks for better caching
             manualChunks: {
               vendor: ['react', 'react-dom'],

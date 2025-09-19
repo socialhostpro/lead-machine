@@ -7,7 +7,23 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <meta name="cache-buster" content="v2.0.0-20240919-001" />
+    <meta name="cache-buster" content="v2.0.0-20240919-002-NOCACHE" />
+    <!-- KILL ALL CACHING -->
+    <script>
+      // Clear all browser storage
+      if (typeof(Storage) !== "undefined") {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+      // Disable cache
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+    </script>
     
     <!-- SEO and Social Meta Tags -->
     <meta name="description" content="Comprehensive lead management system with AI-powered insights and automated workflows" />
