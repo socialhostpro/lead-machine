@@ -41,6 +41,11 @@ type LeadRow = {
   issue_description: string | null
   source_conversation_id: string | null
   ai_insights: Json | null
+  has_audio: boolean | null
+  has_user_audio: boolean | null
+  has_response_audio: boolean | null
+  audio_path: string | null
+  is_deleted: boolean | null
 };
 
 // RENAMED from UserRow to ProfileRow to match the table name change.
@@ -137,6 +142,14 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 // Helper to convert Supabase snake_case to our app's camelCase
 export const fromSupabase = (lead: Database['public']['Tables']['leads']['Row']): Lead => {
+    // Create call details if we have a conversation ID
+    const callDetails = lead.source_conversation_id ? {
+        conversationId: lead.source_conversation_id,
+        agentId: 'default', // Will be enriched later if needed
+        summaryTitle: lead.issue_description || 'ElevenLabs Call',
+        transcriptSummary: lead.issue_description || 'Call imported from ElevenLabs'
+    } : undefined;
+
     return {
         id: lead.id,
         createdAt: lead.created_at,
@@ -153,6 +166,8 @@ export const fromSupabase = (lead: Database['public']['Tables']['leads']['Row'])
         // FIX: Cast via 'unknown' for types that don't overlap sufficiently.
         notes: lead.notes ? (lead.notes as unknown as Note[]) : [],
         aiInsights: lead.ai_insights ? (lead.ai_insights as unknown as AIInsights) : null,
+        callDetails: callDetails,
+        hasAudio: lead.has_audio || false
     };
 };
 
@@ -171,5 +186,10 @@ export const toSupabase = (leadData: Omit<Lead, 'id' | 'createdAt'>): Database['
         issue_description: leadData.issueDescription ?? null,
         source_conversation_id: leadData.callDetails?.conversationId ?? null,
         ai_insights: leadData.aiInsights ? (leadData.aiInsights as unknown as Json) : null,
+        has_audio: leadData.hasAudio ?? false,
+        has_user_audio: false,
+        has_response_audio: false,
+        audio_path: null,
+        is_deleted: false
     };
 };

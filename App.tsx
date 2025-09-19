@@ -233,153 +233,97 @@ const App: React.FC = () => {
     }
 
     setIsLeadsLoading(true);
-    let initialCallLeads: Lead[] = [];
 
     try {
-      // PHASE 1: Fetch list via Edge Function
-      const listResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/elevenlabs-conversations`, {
-          headers: { 
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': 'application/json'
-          }
-      });
-      if (!listResponse.ok) throw new Error(`Edge Function Error (List): ${listResponse.statusText}`);
-      const elevenLabsData = await listResponse.json();
-      const conversations = elevenLabsData.conversations || [];
-
-      const { data: supabaseLeads, error } = await supabase.from('leads').select('*').eq('company_id', currentCompany.id);
-      if (error) throw error;
-      // FIX: Handle possible null value for supabaseLeads and explicitly type the map
-      // to resolve type inference issues causing properties to be 'unknown'.
-      const supabaseLeadsMap: Map<string | null, Lead> = new Map(
-        supabaseLeads?.map(l => [l.source_conversation_id, fromSupabase(l)]) ?? []
-      );
+      // DATABASE-FIRST APPROACH: Load from database as primary source
+      const { data: supabaseLeads, error: dbError } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .order('created_at', { ascending: false });
       
-      initialCallLeads = conversations.map((conv: any) => {
-          const supabaseData = supabaseLeadsMap.get(conv.conversation_id);
+      if (dbError) throw dbError;
+      
+      // Convert database leads to frontend format
+      let databaseLeads: Lead[] = supabaseLeads?.map(l => fromSupabase(l)) ?? [];
+      
+      // SYNC PHASE: Check ElevenLabs API for new conversations to save to database
+      try {
+        const listResponse = await fetch(`https://xxjpzdmatqcgjxsdokou.supabase.co/functions/v1/elevenlabs-conversations`, {
+            headers: { 
+              'Authorization': `Bearer ${session?.access_token}`,
+              'Content-Type': 'application/json'
+            }
+        });
+        
+        if (listResponse.ok) {
+          const elevenLabsData = await listResponse.json();
+          const conversations = elevenLabsData.conversations || [];
           
-          return {
-              id: supabaseData?.id || conv.conversation_id,
-              companyId: currentCompany.id,
-              firstName: 'Unknown',
-              lastName: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+          // Create map of existing conversation IDs in database
+          const existingConversationIds = new Set(
+            databaseLeads
+              .filter(l => l.source === LeadSource.INCOMING_CALL && l.callDetails?.conversationId)
+              .map(l => l.callDetails?.conversationId)
+          );
+          
+          // Find new conversations not in database
+          const newConversations = conversations.filter((conv: any) => 
+            !existingConversationIds.has(conv.conversation_id)
+          );
+          
+          // Save new conversations to database
+          if (newConversations.length > 0) {
+            console.log(`Saving ${newConversations.length} new conversations to database`);
+            
+            const newLeadsData = newConversations.map((conv: any) => ({
+              company_id: currentCompany.id,
+              first_name: 'Unknown',
+              last_name: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
               company: '',
               email: `${conv.conversation_id}@imported-lead.com`,
               phone: 'N/A',
-              status: supabaseData?.status || LeadStatus.NEW,
-              createdAt: new Date(conv.start_time_unix_secs * 1000).toISOString(),
-              notes: supabaseData?.notes || [],
+              status: LeadStatus.NEW,
+              created_at: new Date(conv.start_time_unix_secs * 1000).toISOString(),
+              notes: JSON.stringify([]),
               source: LeadSource.INCOMING_CALL,
-              callDetails: {
-                  conversationId: conv.conversation_id,
-                  agentId: conv.agent_id,
-                  summaryTitle: conv.call_summary_title || 'No Title',
-                  transcriptSummary: conv.transcript_summary || 'No summary available.',
-              },
-              issueDescription: supabaseData?.issueDescription || undefined,
-              hasAudio: conv.has_audio,
-              aiInsights: supabaseData?.aiInsights || null,
-          } as Lead;
-      }).filter(Boolean) as Lead[];
-      
-      const manualLeads = supabaseLeads?.filter(l => l.source !== LeadSource.INCOMING_CALL).map(fromSupabase) || [];
-      const allFetchedLeads = [...initialCallLeads, ...manualLeads];
-
-      // Intelligent Sync: Determine what has changed to avoid unnecessary re-renders
-      const currentLeadsMap = new Map(leadsRef.current.map(l => [l.id, l]));
-      const freshLeadsMap = new Map(allFetchedLeads.map(l => [l.id, l]));
-
-      const newLeads = allFetchedLeads.filter(l => !currentLeadsMap.has(l.id));
-      const deletedLeadIds = leadsRef.current.filter(l => !freshLeadsMap.has(l.id)).map(l => l.id);
-      const updatedLeads: Lead[] = [];
-      
-      for (const freshLead of allFetchedLeads) {
-        const currentLead = currentLeadsMap.get(freshLead.id);
-        if (currentLead) {
-            const hasChanged = currentLead.status !== freshLead.status ||
-                currentLead.firstName !== freshLead.firstName ||
-                currentLead.lastName !== freshLead.lastName ||
-                currentLead.phone !== freshLead.phone ||
-                currentLead.email !== freshLead.email ||
-                currentLead.callDetails?.summaryTitle !== freshLead.callDetails?.summaryTitle;
-            if(hasChanged) {
-                updatedLeads.push(freshLead);
+              source_conversation_id: conv.conversation_id,
+              issue_description: conv.transcript_summary || 'ElevenLabs conversation',
+              has_audio: conv.has_audio || false,
+              has_user_audio: false,
+              has_response_audio: false,
+              audio_path: null,
+              is_deleted: false,
+              ai_insights: null
+            }));
+            
+            const { data: insertedLeads, error: insertError } = await supabase
+              .from('leads')
+              .insert(newLeadsData)
+              .select();
+            
+            if (!insertError && insertedLeads) {
+              // Add new leads to our list (prepend so they appear at top)
+              const newFrontendLeads = insertedLeads.map(fromSupabase);
+              databaseLeads = [...newFrontendLeads, ...databaseLeads];
+            } else if (insertError) {
+              console.error('Error inserting new leads:', insertError);
             }
+          }
         }
+      } catch (apiError) {
+        console.warn('ElevenLabs API sync failed, using database data only:', apiError);
       }
-
-      if (newLeads.length > 0 || deletedLeadIds.length > 0 || updatedLeads.length > 0) {
-        setLeads(prevLeads => {
-            const updatedLeadsMap = new Map(updatedLeads.map(l => [l.id, l]));
-            const deletedLeadIdsSet = new Set(deletedLeadIds);
-            const filteredList = prevLeads.filter(l => !deletedLeadIdsSet.has(l.id));
-            const updatedList = filteredList.map(l => updatedLeadsMap.get(l.id) || l);
-            return [...newLeads, ...updatedList];
-        });
-      }
-
-      if (newLeads.length > 0 && !document.hasFocus()) {
-          newLeads.forEach(showNewLeadNotification);
-      }
+      
+      // Set leads from database (now includes any newly synced conversations)
+      setLeads(databaseLeads);
 
     } catch (error) {
-        console.error("Failed to fetch initial leads:", error);
+        console.error("Failed to fetch leads:", error);
         alert(`Error fetching leads: ${getSupabaseErrorMessage(error)}`);
         setLeads([]);
     } finally {
         setIsLeadsLoading(false);
-    }
-    
-    // PHASE 2: If initial fetch was successful, enrich the leads with details in the background
-    if (initialCallLeads.length > 0) {
-        const detailPromises = initialCallLeads.map(lead => 
-            fetch(`${supabase.supabaseUrl}/functions/v1/elevenlabs-conversations?conversation_id=${lead.callDetails?.conversationId}`, {
-                headers: { 
-                  'Authorization': `Bearer ${session?.access_token}`,
-                  'Content-Type': 'application/json'
-                }
-            })
-            .then(res => res.ok ? res.json() : Promise.resolve(null))
-            .catch(err => {
-                console.warn(`Failed to fetch details for ${lead.id}:`, err);
-                return null;
-            })
-        );
-        
-        const details = await Promise.all(detailPromises);
-  
-        const enrichedLeads = initialCallLeads.map((lead, index) => {
-            const detailData = details[index];
-            if (!detailData || !detailData.analysis?.data_collection_results) {
-                return lead;
-            }
-  
-            const collectedData = detailData.analysis.data_collection_results;
-            const getVal = (key: string) => (collectedData[key] && collectedData[key].value) ? collectedData[key].value : null;
-  
-            const phone = getVal('phone');
-            const firstName = getVal('firstname');
-            const lastName = getVal('lastname');
-            const email = getVal('email');
-            const issueDescription = getVal('description');
-            
-            const finalFirstName = firstName || 'Unknown';
-            const finalLastName = lastName || (phone ? `Contact (${phone})` : lead.lastName);
-            
-            return {
-                ...lead,
-                firstName: finalFirstName,
-                lastName: finalLastName,
-                email: email || lead.email,
-                phone: phone || lead.phone,
-                issueDescription: issueDescription || lead.issueDescription,
-            };
-        });
-  
-        setLeads(currentLeads => {
-            const enrichedLeadsMap = new Map(enrichedLeads.map(l => [l.id, l]));
-            return currentLeads.map(lead => enrichedLeadsMap.get(lead.id) || lead);
-        });
     }
     
     // Update cache timestamp
