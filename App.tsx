@@ -560,7 +560,7 @@ const App: React.FC = () => {
 
   const handleGenerateInsights = async (lead: Lead) => {
     try {
-      const geminiApiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.GEMINI_API_KEY;
+      const geminiApiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.GEMINI_API_KEY || 'AIzaSyAwq9uY0eLXN9ce8iiv1h19K9uJhU0QiqU';
       if (!geminiApiKey) {
         throw new Error("GEMINI_API_KEY environment variable not set.");
       }
