@@ -57,7 +57,6 @@ type LeadRow = {
   has_audio: boolean | null
   has_user_audio: boolean | null
   has_response_audio: boolean | null
-  audio_path: string | null
   is_deleted: boolean | null
 };
 
@@ -209,7 +208,6 @@ export const toSupabase = (leadData: Omit<Lead, 'id' | 'createdAt'>): Database['
         has_audio: leadData.hasAudio ?? false,
         has_user_audio: false,
         has_response_audio: false,
-        audio_path: null,
         is_deleted: false
     };
 };
