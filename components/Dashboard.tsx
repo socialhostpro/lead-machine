@@ -417,6 +417,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 onOpenAddNoteModal={onOpenAddNoteModal}
                                 onSendToWebhook={onSendToWebhook}
                                 onGenerateInsights={onGenerateInsights}
+                                userEmail={currentUser.email}
+                                companyId={currentCompany.id}
                             />
                         ))}
                     </div>

@@ -5,6 +5,7 @@ import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
 import ConfirmationModal from './ConfirmationModal';
 import ElevenLabsAudioPlayer from './ElevenLabsAudioPlayer';
+import EmailModal from './EmailModal';
 
 interface LeadCardProps {
   lead: Lead;
@@ -16,11 +17,14 @@ interface LeadCardProps {
   onSendToWebhook: (lead: Lead) => Promise<void>;
   onGenerateInsights: (lead: Lead) => Promise<void>;
   isHighlighted?: boolean;
+  userEmail?: string;
+  companyId?: string;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, isHighlighted }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, isHighlighted, userEmail, companyId }) => {
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
+  const [isEmailModalOpen, setEmailModalOpen] = useState(false);
   const [copiedItem, setCopiedItem] = useState<'email' | 'phone' | null>(null);
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
@@ -249,6 +253,9 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                 <button onClick={() => onOpenEditModal(lead)} title="Edit Lead" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     <PencilIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
                 </button>
+                <button onClick={() => setEmailModalOpen(true)} title="Send Email" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                    <EnvelopeIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                </button>
                  <button onClick={handleDownload} title="Download Lead Data" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     <ArrowDownTrayIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
                 </button>
@@ -287,6 +294,14 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
         message={`After you call or email, would you like to mark this lead's status as 'Contacted'?`}
         confirmText="Yes, Mark as Contacted"
         cancelText="No, Not Now"
+      />
+      
+      <EmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        lead={lead}
+        userEmail={userEmail || ''}
+        companyId={companyId || ''}
       />
     </>
   );
