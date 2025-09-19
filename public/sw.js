@@ -86,6 +86,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip Supabase Edge Functions - let them handle their own CORS
+  if (request.url.includes('/functions/v1/')) {
+    return;
+  }
+
   event.respondWith(handleFetchRequest(request, url));
 });
 
