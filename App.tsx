@@ -163,6 +163,16 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
+    // CRITICAL: Unregister any existing service workers to prevent CORS issues
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+          console.log('🗑️ Unregistered service worker:', registration.scope);
+        }
+      });
+    }
+    
     const fetchInitialData = async () => {
       if (!session) {
         setCurrentUser(null);
