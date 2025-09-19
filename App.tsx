@@ -163,8 +163,12 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // Make cache clearing available globally for debugging
+    // Make cache clearing available globally for debugging - FORCE CLEAR NOW
   useEffect(() => {
+    // Clear old cache format to force refresh
+    const oldCacheKeys = Object.keys(localStorage).filter(key => key.includes('leads-'));
+    oldCacheKeys.forEach(key => localStorage.removeItem(key));
+    
     (window as any).clearLeadsCache = () => {
       const cacheKey = `leads-last-fetch-${currentCompany?.id}`;
       localStorage.removeItem(cacheKey);
@@ -375,6 +379,8 @@ const App: React.FC = () => {
     if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
       console.log('Using cached leads data (background sync handles ElevenLabs)');
       setIsLeadsLoading(false);
+      // Force background sync to run immediately if not already running
+      setTimeout(() => syncElevenLabsInBackground(), 1000);
       return;
     }
 
