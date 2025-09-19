@@ -153,7 +153,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
         {/* AI Insights or Generate Button */}
         <div className="border-t border-slate-200 dark:border-slate-700 pt-3 mt-1">
           {lead.aiInsights ? (
-            <CollapsibleSection title="AI Insights" initiallyOpen={true}>
+            <CollapsibleSection title="AI Insights" initiallyOpen={false}>
               <div className="space-y-4 pt-2">
                 <div className="flex items-start justify-between">
                   <div>
@@ -204,12 +204,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
         {/* Collapsible Details */}
         <div className="space-y-1">
             {lead.issueDescription && (
-                <CollapsibleSection title="Issue Description">
+                <CollapsibleSection title="Issue Description" initiallyOpen={true}>
                     <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{lead.issueDescription}</p>
                 </CollapsibleSection>
             )}
              {lead.callDetails && (
-                <CollapsibleSection title="Call Details">
+                <CollapsibleSection title="Call Details" initiallyOpen={true}>
                     <div className="space-y-3">
                         <h4 className="font-semibold text-teal-700 dark:text-teal-300">{lead.callDetails.summaryTitle}</h4>
                         {lead.hasAudio && elevenlabsApiKey ? (
