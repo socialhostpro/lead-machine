@@ -326,26 +326,28 @@ const App: React.FC = () => {
           if (newConversations.length > 0) {
             console.log(`Saving ${newConversations.length} new conversations to database`);
             
-            const newLeadsData = newConversations.map((conv: any) => ({
-              company_id: currentCompany.id,
-              first_name: 'Unknown',
-              last_name: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-              company: '',
-              email: `${conv.conversation_id}@imported-lead.com`,
-              phone: 'N/A',
-              status: LeadStatus.NEW,
-              created_at: new Date(conv.start_time_unix_secs * 1000).toISOString(),
-              notes: JSON.stringify([]),
-              source: LeadSource.INCOMING_CALL,
-              source_conversation_id: conv.conversation_id,
-              issue_description: conv.transcript_summary || 'ElevenLabs conversation',
-              has_audio: conv.has_audio || false,
-              has_user_audio: false,
-              has_response_audio: false,
-              audio_path: null,
-              is_deleted: false,
-              ai_insights: null
-            }));
+            const newLeadsData = newConversations.map((conv: any) => {
+              const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
+                companyId: currentCompany.id,
+                firstName: 'Unknown',
+                lastName: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+                company: '',
+                email: `${conv.conversation_id}@imported-lead.com`,
+                phone: 'N/A',
+                status: LeadStatus.NEW,
+                notes: [],
+                source: LeadSource.INCOMING_CALL,
+                callDetails: {
+                  conversationId: conv.conversation_id,
+                  summaryTitle: 'ElevenLabs Conversation',
+                  transcriptSummary: conv.transcript_summary || 'ElevenLabs conversation'
+                },
+                issueDescription: conv.transcript_summary || 'ElevenLabs conversation',
+                hasAudio: conv.has_audio || false,
+                aiInsights: null
+              };
+              return toSupabase(leadForConversion);
+            });
             
             const { data: insertedLeads, error: insertError } = await supabase
               .from('leads')
