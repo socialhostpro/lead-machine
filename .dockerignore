@@ -1,0 +1,16 @@
+# Deno cache
+.deno/
+
+# Node.js
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Environment
+.env*
+!.env.example
+
+# Build output
+dist/
+build/

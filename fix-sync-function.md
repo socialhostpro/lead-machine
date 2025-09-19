@@ -1,0 +1,1 @@
+-- This file is deprecated. Please use database_setup.md for the complete database schema.

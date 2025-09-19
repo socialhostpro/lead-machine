@@ -1,0 +1,7 @@
+# Railway ignore file
+node_modules/
+.git/
+.env*
+*.log
+.DS_Store
+Thumbs.db
