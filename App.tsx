@@ -71,11 +71,31 @@ const App: React.FC = () => {
   // App State
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  
+  // Persistent leads state with localStorage
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    try {
+      const savedLeads = localStorage.getItem('leads-cache');
+      return savedLeads ? JSON.parse(savedLeads) : [];
+    } catch {
+      return [];
+    }
+  });
+  
+  // Update localStorage when leads change
+  useEffect(() => {
+    try {
+      localStorage.setItem('leads-cache', JSON.stringify(leads));
+    } catch (error) {
+      console.warn('Failed to save leads to localStorage:', error);
+    }
+  }, [leads]);
+  
   const leadsRef = useRef(leads);
   useEffect(() => {
     leadsRef.current = leads;
   }, [leads]);
+  
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [forms, setForms] = useState<WebForm[]>([]);
@@ -189,13 +209,25 @@ const App: React.FC = () => {
   
   const currentCompany = useMemo(() => companies.find(c => c.id === currentCompanyId), [companies, currentCompanyId]);
   
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (forceRefresh = false) => {
     if (!currentCompany?.defaultAgentId) {
       if(currentCompany) {
         alert('Please set your Default Agent ID in settings to fetch call data.');
         setIsSettingsModalOpen(true);
       }
       setLeads([]);
+      setIsLeadsLoading(false);
+      return;
+    }
+
+    // Check cache freshness (5 minutes)
+    const cacheKey = `leads-last-fetch-${currentCompany.id}`;
+    const lastFetchTime = localStorage.getItem(cacheKey);
+    const now = Date.now();
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    
+    if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
+      console.log('Using cached leads data');
       setIsLeadsLoading(false);
       return;
     }
@@ -349,6 +381,9 @@ const App: React.FC = () => {
             return currentLeads.map(lead => enrichedLeadsMap.get(lead.id) || lead);
         });
     }
+    
+    // Update cache timestamp
+    localStorage.setItem(cacheKey, now.toString());
   }, [currentCompany, session]);
 
   const fetchForms = useCallback(async () => {
