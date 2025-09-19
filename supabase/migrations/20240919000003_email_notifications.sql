@@ -16,9 +16,9 @@ ALTER TABLE email_notifications ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "email_notifications_policy" ON email_notifications
     FOR ALL USING (
         EXISTS (
-            SELECT 1 FROM users 
-            WHERE users.id = auth.uid() 
-            AND users.role = 'admin'
+            SELECT 1 FROM profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role = 'SaaS Admin'
         )
     );
 
@@ -37,10 +37,10 @@ BEGIN
     SELECT * INTO company_record FROM companies WHERE id = lead_record.company_id;
     
     -- Get admin emails for this company
-    SELECT ARRAY_AGG(users.email) INTO admin_emails
-    FROM users 
-    WHERE users.company_id = lead_record.company_id 
-    AND users.role IN ('admin', 'manager');
+    SELECT ARRAY_AGG(profiles.email) INTO admin_emails
+    FROM profiles 
+    WHERE profiles.company_id = lead_record.company_id 
+    AND profiles.role IN ('Owner', 'SaaS Admin');
     
     -- Only send notification if we have admin emails
     IF array_length(admin_emails, 1) > 0 THEN
@@ -70,13 +70,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Create trigger for new messages
-DROP TRIGGER IF EXISTS trigger_notify_new_message ON notes;
-CREATE TRIGGER trigger_notify_new_message
-    AFTER INSERT ON notes
-    FOR EACH ROW
-    WHEN (NEW.type = 'message')
-    EXECUTE FUNCTION notify_new_message();
+-- Email notifications are now handled in app logic when messages are added
+-- No trigger needed as the notes/messages table doesn't exist yet
 
 -- Create function to handle multiple new messages (batch notifications)
 CREATE OR REPLACE FUNCTION notify_multiple_messages()
