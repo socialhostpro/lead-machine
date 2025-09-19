@@ -367,7 +367,7 @@ const App: React.FC = () => {
         fetchLeads();
         fetchForms();
     }
-  }, [currentCompanyId, fetchLeads, fetchForms]);
+  }, [currentCompanyId]); // FIXED: Removed fetchLeads, fetchForms from deps to stop infinite re-renders
 
 
   const handleAddLead = async (leadData: Omit<Lead, 'id' | 'createdAt' | 'notes' | 'status' | 'source' | 'callDetails' | 'companyId'> & { issueDescription?: string }) => {
