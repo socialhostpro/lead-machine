@@ -17,12 +17,13 @@ interface LeadCardProps {
   onSendToWebhook: (lead: Lead) => Promise<void>;
   onGenerateInsights: (lead: Lead) => Promise<void>;
   onSendEmail?: (lead: Lead) => Promise<void>;
+  onOpenDetailedInsights?: (lead: Lead) => void;
   isHighlighted?: boolean;
   userEmail?: string;
   companyId?: string;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, isHighlighted, userEmail, companyId }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenDetailedInsights, isHighlighted, userEmail, companyId }) => {
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
@@ -188,7 +189,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
         {/* AI Insights or Generate Button */}
         <div className="border-t border-slate-200 dark:border-slate-700 pt-3 mt-1">
           {lead.aiInsights ? (
-            <CollapsibleSection title="AI Insights" initiallyOpen={false}>
+            <CollapsibleSection title={`AI Insights${lead.aiInsights.serviceType === 'legal' ? ' - Legal Case' : ''}`} initiallyOpen={false}>
               <div className="space-y-4 pt-2">
                 <div className="flex items-start justify-between">
                   <div>
@@ -201,6 +202,47 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                     <ArrowPathIcon className={`w-5 h-5 text-slate-600 dark:text-slate-300 ${isGeneratingInsights ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
+                
+                {/* Service Type Badge */}
+                {lead.aiInsights.serviceType && (
+                  <div>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      lead.aiInsights.serviceType === 'legal' 
+                        ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200'
+                        : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200'
+                    }`}>
+                      {lead.aiInsights.serviceType.charAt(0).toUpperCase() + lead.aiInsights.serviceType.slice(1)} Service
+                    </span>
+                  </div>
+                )}
+                
+                {/* Legal-specific quick info */}
+                {lead.aiInsights.legalSpecific && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-800">
+                    <h5 className="font-semibold text-purple-800 dark:text-purple-200 text-sm mb-1">Legal Case Info</h5>
+                    <div className="text-xs space-y-1">
+                      {lead.aiInsights.legalSpecific.caseType && (
+                        <p><strong>Type:</strong> {lead.aiInsights.legalSpecific.caseType}</p>
+                      )}
+                      {lead.aiInsights.legalSpecific.urgencyLevel && (
+                        <p><strong>Urgency:</strong> 
+                          <span className={`ml-1 font-medium ${
+                            lead.aiInsights.legalSpecific.urgencyLevel === 'critical' ? 'text-red-600 dark:text-red-400' :
+                            lead.aiInsights.legalSpecific.urgencyLevel === 'high' ? 'text-orange-600 dark:text-orange-400' :
+                            lead.aiInsights.legalSpecific.urgencyLevel === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-green-600 dark:text-green-400'
+                          }`}>
+                            {lead.aiInsights.legalSpecific.urgencyLevel.charAt(0).toUpperCase() + lead.aiInsights.legalSpecific.urgencyLevel.slice(1)}
+                          </span>
+                        </p>
+                      )}
+                      {lead.aiInsights.legalSpecific.caseNumber && (
+                        <p><strong>Case #:</strong> <span className="font-mono">{lead.aiInsights.legalSpecific.caseNumber}</span></p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div>
                   <h5 className="font-semibold text-slate-600 dark:text-slate-400 mb-1 text-sm">Justification</h5>
                   <p className="text-slate-600 dark:text-slate-300 text-xs italic">{lead.aiInsights.justification}</p>
@@ -208,15 +250,32 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                 <div>
                   <h5 className="font-semibold text-slate-600 dark:text-slate-400 mb-1 text-sm">Key Pain Points</h5>
                   <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300 text-xs">
-                    {lead.aiInsights.keyPainPoints.map((point, i) => <li key={i}>{point}</li>)}
+                    {lead.aiInsights.keyPainPoints.slice(0, 3).map((point, i) => <li key={i}>{point}</li>)}
+                    {lead.aiInsights.keyPainPoints.length > 3 && (
+                      <li className="text-slate-500 dark:text-slate-400 italic">+{lead.aiInsights.keyPainPoints.length - 3} more...</li>
+                    )}
                   </ul>
                 </div>
                 <div>
                   <h5 className="font-semibold text-slate-600 dark:text-slate-400 mb-1 text-sm">Suggested Next Steps</h5>
                   <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300 text-xs">
-                    {lead.aiInsights.suggestedNextSteps.map((step, i) => <li key={i}>{step}</li>)}
+                    {lead.aiInsights.suggestedNextSteps.slice(0, 3).map((step, i) => <li key={i}>{step}</li>)}
+                    {lead.aiInsights.suggestedNextSteps.length > 3 && (
+                      <li className="text-slate-500 dark:text-slate-400 italic">+{lead.aiInsights.suggestedNextSteps.length - 3} more...</li>
+                    )}
                   </ul>
                 </div>
+                
+                {/* More Details Button */}
+                {(lead.aiInsights.isLengthy || lead.aiInsights.legalSpecific || lead.aiInsights.detailedAnalysis) && onOpenDetailedInsights && (
+                  <button
+                    onClick={() => onOpenDetailedInsights(lead)}
+                    className="w-full mt-3 py-2 px-3 bg-blue-500/10 hover:bg-blue-500/20 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 font-semibold rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                  >
+                    <LightBulbIcon className="w-4 h-4" />
+                    View Detailed Report
+                  </button>
+                )}
               </div>
             </CollapsibleSection>
           ) : (

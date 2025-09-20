@@ -20,6 +20,7 @@ import EmbedCodeModal from './components/EmbedCodeModal';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { EmailNotificationManager, sendNewMessageNotification, getEmailNotificationConfig } from './utils/emailNotifications';
 import ActivityCallModal from './components/ActivityCallModal';
+import DetailedInsightsModal from './components/DetailedInsightsModal';
 
 
 // Helper to get a user-friendly error message from a Supabase error object.
@@ -116,6 +117,7 @@ const App: React.FC = () => {
   const [isFormsModalOpen, setFormsModalOpen] = useState(false);
   const [isEmbedCodeModalOpen, setEmbedCodeModalOpen] = useState(false);
   const [isActivityCallModalOpen, setActivityCallModalOpen] = useState(false);
+  const [isDetailedInsightsModalOpen, setDetailedInsightsModalOpen] = useState(false);
 
 
   // Data for modals
@@ -123,6 +125,7 @@ const App: React.FC = () => {
   const [leadForNewNote, setLeadForNewNote] = useState<Lead | null>(null);
   const [selectedFormForEmbed, setSelectedFormForEmbed] = useState<WebForm | null>(null);
   const [selectedActivityLead, setSelectedActivityLead] = useState<Lead | null>(null);
+  const [selectedInsightsLead, setSelectedInsightsLead] = useState<Lead | null>(null);
   
   // FIX: Removed `as any` cast. Types for `import.meta.env` are now available globally.
   // const elevenLabsApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY; // Removed - now using Edge Functions
@@ -1052,6 +1055,11 @@ Please log in to the Lead Machine to review and respond to this lead.`;
     }
   };
   
+  const handleOpenDetailedInsights = (lead: Lead) => {
+    setSelectedInsightsLead(lead);
+    setDetailedInsightsModalOpen(true);
+  };
+  
   const handleSaveNote = async (noteText: string) => {
       if (!leadForNewNote) return;
       const newNote: Note = {
@@ -1219,8 +1227,17 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
       }
       const ai = new GoogleGenerativeAI(geminiApiKey);
 
-      // Construct a detailed prompt
-      let prompt = `Analyze the following sales lead and provide insights.
+      // Detect service type based on content
+      const contentToAnalyze = `${lead.issueDescription || ''} ${lead.callDetails?.transcriptSummary || ''} ${lead.callDetails?.summaryTitle || ''} ${lead.notes?.map(n => n.text).join(' ') || ''}`.toLowerCase();
+      
+      const isLegal = /\b(attorney|lawyer|legal|law|court|case|lawsuit|litigation|divorce|criminal|civil|defense|prosecution|judge|jury|trial|settlement|contract|will|estate|injury|malpractice|custody|alimony|bankruptcy|immigration|dui|dwi|felony|misdemeanor|plea|subpoena|deposition|arbitration|mediation)\b/i.test(contentToAnalyze);
+      
+      // Extract potential case numbers
+      const caseNumberMatches = contentToAnalyze.match(/\b(case\s*#?|no\.?\s*|number\s*#?)\s*([a-z0-9\-]{3,20})\b/gi);
+      const detectedCaseNumbers = caseNumberMatches?.map(match => match.replace(/^(case\s*#?|no\.?\s*|number\s*#?)\s*/i, '').trim()) || [];
+
+      // Construct a service-specific prompt
+      let prompt = `You are an expert analyst for a professional services lead management system. Analyze the following lead and provide comprehensive insights.
       
       Lead Details:
       - Name: ${lead.firstName} ${lead.lastName}
@@ -1236,12 +1253,48 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
       if (lead.callDetails?.transcriptSummary) {
         prompt += `\n- Call Summary: ${lead.callDetails.transcriptSummary}`;
       }
+      if (lead.callDetails?.summaryTitle) {
+        prompt += `\n- Call Title: ${lead.callDetails.summaryTitle}`;
+      }
       if (lead.notes && lead.notes.length > 0) {
         const notesText = lead.notes.map(n => `- ${n.text}`).join('\n');
         prompt += `\n\nNotes:\n${notesText}`;
       }
       
-      prompt += `\n\nBased on all the information, provide a qualification score from 1 to 100, a brief justification for the score, a list of key pain points, and a list of suggested next steps for the sales agent to take. A higher score means a more qualified lead who is more likely to convert to a sale.`;
+      if (isLegal) {
+        prompt += `\n\nThis appears to be a LEGAL SERVICE inquiry. Please provide specialized legal insights including:
+        1. Type of legal case (e.g., personal injury, divorce, criminal defense, corporate law, etc.)
+        2. Potential case value and complexity
+        3. Urgency level based on legal timelines
+        4. Jurisdiction considerations
+        5. Specific legal pain points and needs
+        `;
+        
+        if (detectedCaseNumbers.length > 0) {
+          prompt += `\n- Detected Case Numbers: ${detectedCaseNumbers.join(', ')}`;
+          prompt += `\n- Note: Analyze if these case numbers indicate ongoing litigation or reference cases`;
+        }
+      }
+      
+      prompt += `\n\nProvide your response in JSON format with the following structure:
+      {
+        "qualificationScore": number (1-100),
+        "justification": "brief explanation of score",
+        "keyPainPoints": ["array", "of", "pain", "points"],
+        "suggestedNextSteps": ["array", "of", "next", "steps"],
+        "serviceType": "${isLegal ? 'legal' : 'general'}",
+        "detailedAnalysis": "comprehensive 2-3 paragraph analysis",
+        ${isLegal ? `"legalSpecific": {
+          "caseType": "type of legal case",
+          "caseNumber": "${detectedCaseNumbers[0] || ''}",
+          "legalIssue": "primary legal issue",
+          "urgencyLevel": "low|medium|high|critical",
+          "potentialValue": "estimated case/client value",
+          "jurisdiction": "applicable jurisdiction if mentioned",
+          "timelineEstimate": "estimated timeline for resolution"
+        },` : ''}
+        "isLengthy": ${isLegal ? 'true' : 'false'}
+      }`;
 
       const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -1251,7 +1304,9 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
 
       let responseText = response.response.text();
       
-      // Try to parse as JSON, fall back to manual parsing if needed
+      // Clean up response text (remove markdown formatting if present)
+      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
       let insights: AIInsights;
       try {
         const parsed = JSON.parse(responseText);
@@ -1259,15 +1314,32 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
           qualificationScore: parsed.qualificationScore || 50,
           justification: parsed.justification || "Analysis generated",
           keyPainPoints: parsed.keyPainPoints || ["Analysis needed"],
-          suggestedNextSteps: parsed.suggestedNextSteps || ["Follow up required"]
+          suggestedNextSteps: parsed.suggestedNextSteps || ["Follow up required"],
+          serviceType: parsed.serviceType || (isLegal ? 'legal' : 'general'),
+          legalSpecific: parsed.legalSpecific || null,
+          detailedAnalysis: parsed.detailedAnalysis || "Detailed analysis available",
+          isLengthy: parsed.isLengthy || false
         };
-      } catch {
-        // Fallback parsing if JSON fails
+      } catch (parseError) {
+        console.warn('Failed to parse AI response as JSON, using fallback:', parseError);
+        // Enhanced fallback parsing for legal cases
         insights = {
-          qualificationScore: 50,
-          justification: "Analysis generated successfully",
-          keyPainPoints: ["Further analysis needed"],
-          suggestedNextSteps: ["Follow up with lead"]
+          qualificationScore: isLegal ? 75 : 50,
+          justification: isLegal ? "Legal service inquiry detected - requires immediate attention" : "Analysis generated successfully",
+          keyPainPoints: isLegal ? ["Legal issue requires professional consultation", "Time-sensitive legal matter"] : ["Further analysis needed"],
+          suggestedNextSteps: isLegal ? ["Schedule legal consultation", "Gather case documentation", "Determine jurisdiction"] : ["Follow up with lead"],
+          serviceType: isLegal ? 'legal' : 'general',
+          legalSpecific: isLegal ? {
+            caseType: "Legal consultation required",
+            caseNumber: detectedCaseNumbers[0] || '',
+            legalIssue: "Legal matter requiring professional review",
+            urgencyLevel: "medium",
+            potentialValue: "To be determined",
+            jurisdiction: "To be determined",
+            timelineEstimate: "Consultation needed"
+          } : null,
+          detailedAnalysis: responseText || "AI analysis completed. Professional review recommended for this inquiry.",
+          isLengthy: isLegal
         };
       }
       
@@ -1401,6 +1473,7 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
         onLogout={handleLogout}
         elevenlabsApiKey={undefined}
         onOpenActivityModal={handleOpenActivityModal}
+        onOpenDetailedInsights={handleOpenDetailedInsights}
       />
       
       <LeadFormModal 
@@ -1486,6 +1559,14 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
         onSendEmail={handleSendEmail}
         userEmail={currentUser?.email}
         companyId={currentCompany?.id}
+        onOpenDetailedInsights={handleOpenDetailedInsights}
+      />
+      
+      <DetailedInsightsModal
+        isOpen={isDetailedInsightsModalOpen}
+        onClose={() => setDetailedInsightsModalOpen(false)}
+        insights={selectedInsightsLead?.aiInsights || null}
+        leadName={selectedInsightsLead ? `${selectedInsightsLead.firstName} ${selectedInsightsLead.lastName}` : ''}
       />
     </>
   );

@@ -30,6 +30,7 @@ interface ActivityCallModalProps {
   onSendToWebhook: (lead: Lead) => Promise<void>;
   onGenerateInsights: (lead: Lead) => Promise<void>;
   onSendEmail?: (lead: Lead) => Promise<void>;
+  onOpenDetailedInsights?: (lead: Lead) => void;
   userEmail?: string;
   companyId?: string;
 }
@@ -45,6 +46,7 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   onSendToWebhook,
   onGenerateInsights,
   onSendEmail,
+  onOpenDetailedInsights,
   userEmail,
   companyId
 }) => {
@@ -308,18 +310,110 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
               )}
 
               {/* AI Insights */}
-              {lead.aiInsights && lead.aiInsights.length > 0 && (
+              {lead.aiInsights && (
                 <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">AI Insights</h3>
-                  <div className="space-y-2">
-                    {lead.aiInsights.map((insight, index) => (
-                      <div key={index} className="bg-white dark:bg-slate-600 p-3 rounded border border-slate-200 dark:border-slate-500">
-                        <p className="text-slate-800 dark:text-white">{insight.content}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Generated on {new Date(insight.createdAt).toLocaleString()}
-                        </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      AI Insights{lead.aiInsights.serviceType === 'legal' ? ' - Legal Case' : ''}
+                    </h3>
+                    {(lead.aiInsights.isLengthy || lead.aiInsights.legalSpecific || lead.aiInsights.detailedAnalysis) && onOpenDetailedInsights && (
+                      <button
+                        onClick={() => onOpenDetailedInsights(lead)}
+                        className="px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 font-medium rounded-md transition-colors text-sm flex items-center gap-1"
+                      >
+                        <LightBulbIcon className="w-4 h-4" />
+                        View Full Report
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    {/* Qualification Score */}
+                    <div className="bg-white dark:bg-slate-600 p-3 rounded border border-slate-200 dark:border-slate-500">
+                      <h4 className="font-medium text-slate-900 dark:text-white text-sm mb-1">Qualification Score</h4>
+                      <p className={`text-2xl font-bold ${
+                        lead.aiInsights.qualificationScore >= 80 ? 'text-green-600 dark:text-green-400' :
+                        lead.aiInsights.qualificationScore >= 60 ? 'text-yellow-600 dark:text-yellow-400' :
+                        lead.aiInsights.qualificationScore >= 40 ? 'text-orange-600 dark:text-orange-400' :
+                        'text-red-600 dark:text-red-400'
+                      }`}>
+                        {lead.aiInsights.qualificationScore}/100
+                      </p>
+                    </div>
+                    
+                    {/* Service Type */}
+                    {lead.aiInsights.serviceType && (
+                      <div className="bg-white dark:bg-slate-600 p-3 rounded border border-slate-200 dark:border-slate-500">
+                        <h4 className="font-medium text-slate-900 dark:text-white text-sm mb-1">Service Type</h4>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          lead.aiInsights.serviceType === 'legal' 
+                            ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200'
+                            : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200'
+                        }`}>
+                          {lead.aiInsights.serviceType.charAt(0).toUpperCase() + lead.aiInsights.serviceType.slice(1)}
+                        </span>
                       </div>
-                    ))}
+                    )}
+                  </div>
+                  
+                  {/* Legal-specific quick info */}
+                  {lead.aiInsights.legalSpecific && (
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-800 mb-4">
+                      <h4 className="font-medium text-purple-800 dark:text-purple-200 text-sm mb-2">Legal Case Summary</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {lead.aiInsights.legalSpecific.caseType && (
+                          <div><strong>Type:</strong> {lead.aiInsights.legalSpecific.caseType}</div>
+                        )}
+                        {lead.aiInsights.legalSpecific.urgencyLevel && (
+                          <div><strong>Urgency:</strong> 
+                            <span className={`ml-1 font-medium ${
+                              lead.aiInsights.legalSpecific.urgencyLevel === 'critical' ? 'text-red-600 dark:text-red-400' :
+                              lead.aiInsights.legalSpecific.urgencyLevel === 'high' ? 'text-orange-600 dark:text-orange-400' :
+                              lead.aiInsights.legalSpecific.urgencyLevel === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-green-600 dark:text-green-400'
+                            }`}>
+                              {lead.aiInsights.legalSpecific.urgencyLevel.charAt(0).toUpperCase() + lead.aiInsights.legalSpecific.urgencyLevel.slice(1)}
+                            </span>
+                          </div>
+                        )}
+                        {lead.aiInsights.legalSpecific.caseNumber && (
+                          <div><strong>Case #:</strong> <span className="font-mono">{lead.aiInsights.legalSpecific.caseNumber}</span></div>
+                        )}
+                        {lead.aiInsights.legalSpecific.potentialValue && (
+                          <div><strong>Est. Value:</strong> {lead.aiInsights.legalSpecific.potentialValue}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-3">
+                    {/* Justification */}
+                    <div>
+                      <h4 className="font-medium text-slate-900 dark:text-white text-sm mb-1">Analysis</h4>
+                      <p className="text-slate-700 dark:text-slate-300 text-sm">{lead.aiInsights.justification}</p>
+                    </div>
+                    
+                    {/* Key Pain Points */}
+                    <div>
+                      <h4 className="font-medium text-slate-900 dark:text-white text-sm mb-1">Key Pain Points</h4>
+                      <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-slate-300 text-sm">
+                        {lead.aiInsights.keyPainPoints.slice(0, 3).map((point, i) => <li key={i}>{point}</li>)}
+                        {lead.aiInsights.keyPainPoints.length > 3 && (
+                          <li className="text-slate-500 dark:text-slate-400 italic">+{lead.aiInsights.keyPainPoints.length - 3} more in detailed report...</li>
+                        )}
+                      </ul>
+                    </div>
+                    
+                    {/* Suggested Next Steps */}
+                    <div>
+                      <h4 className="font-medium text-slate-900 dark:text-white text-sm mb-1">Suggested Next Steps</h4>
+                      <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-slate-300 text-sm">
+                        {lead.aiInsights.suggestedNextSteps.slice(0, 3).map((step, i) => <li key={i}>{step}</li>)}
+                        {lead.aiInsights.suggestedNextSteps.length > 3 && (
+                          <li className="text-slate-500 dark:text-slate-400 italic">+{lead.aiInsights.suggestedNextSteps.length - 3} more in detailed report...</li>
+                        )}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}

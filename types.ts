@@ -55,6 +55,18 @@ export interface AIInsights {
   justification: string;
   keyPainPoints: string[];
   suggestedNextSteps: string[];
+  serviceType?: 'legal' | 'general' | 'medical' | 'financial' | 'insurance' | 'real_estate' | 'other';
+  legalSpecific?: {
+    caseType?: string;
+    caseNumber?: string;
+    legalIssue?: string;
+    urgencyLevel?: 'low' | 'medium' | 'high' | 'critical';
+    potentialValue?: string;
+    jurisdiction?: string;
+    timelineEstimate?: string;
+  };
+  detailedAnalysis?: string;
+  isLengthy?: boolean; // Flag to show "More Details" button
 }
 
 export interface Lead {

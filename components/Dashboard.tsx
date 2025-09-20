@@ -30,6 +30,7 @@ interface DashboardProps {
   onOpenForms: () => void;
   elevenlabsApiKey?: string;
   onOpenActivityModal: (leadId: string) => void;
+  onOpenDetailedInsights: (lead: Lead) => void;
 }
 
 const StatCard: React.FC<{ title: string; value: number; color: string }> = ({ title, value, color }) => (
@@ -65,7 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   leads, companies, currentCompany, currentUser, theme, isLoading,
   onCompanyChange, onAddNew, onOpenSettings, onOpenProfile, onToggleTheme, onRefreshLeads, onOpenUserManagement, onLogout,
   onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenForms,
-  elevenlabsApiKey, onOpenActivityModal
+  elevenlabsApiKey, onOpenActivityModal, onOpenDetailedInsights
 }) => {
   const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -424,6 +425,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     onSendEmail={onSendEmail}
                                     userEmail={currentUser.email}
                                     companyId={currentCompany.id}
+                                    onOpenDetailedInsights={onOpenDetailedInsights}
                                 />
                             </div>
                         ))}
