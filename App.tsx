@@ -22,6 +22,7 @@ import { EmailNotificationManager, sendNewMessageNotification, getEmailNotificat
 import ActivityCallModal from './components/ActivityCallModal';
 import DetailedInsightsModal from './components/DetailedInsightsModal';
 import { googleAdsService, createCompanyGoogleAdsService, GoogleAdsService } from './utils/googleAdsService';
+import { sendNewLeadsNotification, getAdminUsers, formatTimeframe } from './utils/leadEmailNotifications';
 
 
 // Helper to get a user-friendly error message from a Supabase error object.
@@ -483,6 +484,29 @@ const App: React.FC = () => {
               } else if (newFrontendLeads.length > 1) {
                 await playNewLeadSound(soundPreferences);
                 console.log(`🔔 ${newFrontendLeads.length} new leads detected!`);
+              }
+            }
+
+            // Send email notification to administrators
+            if (newFrontendLeads.length > 0 && currentCompany && users.length > 0) {
+              try {
+                const adminUsers = getAdminUsers(users.filter(u => u.companyId === currentCompany.id));
+                const timeframe = formatTimeframe(5); // 5 minutes for background sync interval
+                
+                const emailResult = await sendNewLeadsNotification(
+                  newFrontendLeads,
+                  currentCompany,
+                  adminUsers,
+                  timeframe
+                );
+                
+                if (emailResult.success) {
+                  console.log(`📧 Email notifications sent for ${newFrontendLeads.length} new leads`);
+                } else {
+                  console.warn('Failed to send email notifications:', emailResult.error);
+                }
+              } catch (error) {
+                console.error('Error sending email notifications:', error);
               }
             }
           } else if (insertError) {
