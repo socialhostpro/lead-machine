@@ -18,12 +18,13 @@ interface LeadCardProps {
   onGenerateInsights: (lead: Lead) => Promise<void>;
   onSendEmail?: (lead: Lead) => Promise<void>;
   onOpenDetailedInsights?: (lead: Lead) => void;
+  onOpenActivityModal?: (leadId: string) => void;
   isHighlighted?: boolean;
   userEmail?: string;
   companyId?: string;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenDetailedInsights, isHighlighted, userEmail, companyId }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenDetailedInsights, onOpenActivityModal, isHighlighted, userEmail, companyId }) => {
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
@@ -165,9 +166,14 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
             <button onClick={() => handleCopy(lead.phone || '', 'phone')} title="Copy Phone" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700" disabled={!lead.phone}>
                 {copiedItem === 'phone' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
             </button>
-            <a href={`tel:${lead.phone}`} onClick={() => setContactModalOpen(true)} title="Call" className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
+            <button 
+              onClick={() => onOpenActivityModal ? onOpenActivityModal(lead.id) : setContactModalOpen(true)} 
+              title="Call" 
+              className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+              disabled={!lead.phone}
+            >
                 <PhoneIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
-            </a>
+            </button>
           </div>
         </div>
         

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Lead, LeadStatus, Company, User, UserRole, Note } from '../types';
 import ActivityFeed from './ActivityFeed';
 import LeadCard from './LeadCard';
-import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, DocumentTextIcon } from './icons';
+import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon } from './icons';
 import Pagination from './Pagination';
 
 interface DashboardProps {
@@ -43,6 +43,7 @@ const StatCard: React.FC<{ title: string; value: number; color: string }> = ({ t
 const TABS: (LeadStatus | 'All')[] = ['All', ...Object.values(LeadStatus)];
 
 const SORT_OPTIONS = {
+  'callDate_desc': 'Latest Caller First',
   'createdAt_desc': 'Newest First',
   'createdAt_asc': 'Oldest First',
   'firstName_asc': 'First Name (A-Z)',
@@ -70,7 +71,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOption, setSortOption] = useState('createdAt_desc');
+  const [sortOption, setSortOption] = useState('callDate_desc');
   const [mobileStatsVisible, setMobileStatsVisible] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true);
@@ -131,6 +132,11 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     filteredLeads.sort((a, b) => {
         switch (sortOption) {
+            case 'callDate_desc':
+                // Sort by call date (callStartTime), fallback to createdAt
+                const aCallTime = a.callDetails?.callStartTime ? new Date(a.callDetails.callStartTime).getTime() : new Date(a.createdAt).getTime();
+                const bCallTime = b.callDetails?.callStartTime ? new Date(b.callDetails.callStartTime).getTime() : new Date(b.createdAt).getTime();
+                return bCallTime - aCallTime;
             case 'createdAt_asc':
                 return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
             case 'firstName_asc':
@@ -274,7 +280,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
               </button>
                <button onClick={onOpenForms} title="Forms" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors">
-                  <DocumentTextIcon className="w-5 h-5" />
+                  <ClipboardIcon className="w-5 h-5" />
               </button>
               <button onClick={onOpenSettings} title="Settings" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors">
                   <Cog6ToothIcon className="w-5 h-5" />
@@ -426,6 +432,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     userEmail={currentUser.email}
                                     companyId={currentCompany.id}
                                     onOpenDetailedInsights={onOpenDetailedInsights}
+                                    onOpenActivityModal={onOpenActivityModal}
                                 />
                             </div>
                         ))}

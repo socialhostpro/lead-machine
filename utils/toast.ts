@@ -115,7 +115,7 @@ class ToastManager {
       message,
       type: options.type || 'info',
       timestamp: Date.now(),
-      duration: options.duration || 4000,
+      duration: options.duration || 3000,
     };
 
     this.toasts.push(toast);
