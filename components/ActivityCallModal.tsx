@@ -10,7 +10,6 @@ import {
   ClipboardIcon, 
   CheckIcon, 
   ArrowDownTrayIcon, 
-  PaperAirplaneIcon, 
   ArrowPathIcon, 
   LightBulbIcon,
   PencilIcon,
@@ -32,7 +31,6 @@ interface ActivityCallModalProps {
   onUpdateLead: (updatedLead: Lead) => void;
   onOpenEditModal: (lead: Lead) => void;
   onOpenAddNoteModal: (lead: Lead) => void;
-  onSendToWebhook: (lead: Lead) => Promise<void>;
   onGenerateInsights: (lead: Lead) => Promise<void>;
   onSendEmail?: (lead: Lead) => Promise<void>;
   onOpenDetailedInsights?: (lead: Lead) => void;
@@ -48,7 +46,6 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   onUpdateLead,
   onOpenEditModal,
   onOpenAddNoteModal,
-  onSendToWebhook,
   onGenerateInsights,
   onSendEmail,
   onOpenDetailedInsights,
@@ -56,7 +53,6 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   companyId
 }) => {
   const [copiedItem, setCopiedItem] = useState<'email' | 'phone' | null>(null);
-  const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   
@@ -150,12 +146,28 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
 
   if (!isOpen || !lead) return null;
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onUpdateLead({ ...lead, status: e.target.value as LeadStatus });
+  const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value as LeadStatus;
+    try {
+      await onUpdateLead({ ...lead, status: newStatus });
+    } catch (error) {
+      console.error('Failed to update lead status:', error);
+      alert('Failed to update lead status. Please try again.');
+    }
   };
 
-  const handleContactAction = () => {
-    onUpdateLead({ ...lead, status: LeadStatus.CONTACTED });
+  const handleContactAction = async () => {
+    try {
+      const updatedLead = { 
+        ...lead, 
+        status: LeadStatus.CONTACTED,
+        lastContactedAt: new Date().toISOString()
+      };
+      await onUpdateLead(updatedLead);
+    } catch (error) {
+      console.error('Failed to mark lead as contacted:', error);
+      alert('Failed to mark lead as contacted. Please try again.');
+    }
   };
   
   const handleDialNumber = () => {
@@ -229,15 +241,6 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
     URL.revokeObjectURL(url);
   };
   
-  const handleWebhookClick = async () => {
-    setIsSendingWebhook(true);
-    try {
-      await onSendToWebhook(lead);
-    } finally {
-      setIsSendingWebhook(false);
-    }
-  };
-
   const handleGenerateInsightsClick = async () => {
     setIsGeneratingInsights(true);
     try {
@@ -710,16 +713,6 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                 <PhoneIcon className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Mark Contacted</span>
                 <span className="sm:hidden">Contact</span>
-              </button>
-
-              <button
-                onClick={handleWebhookClick}
-                disabled={isSendingWebhook}
-                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition-colors text-xs sm:text-sm"
-              >
-                <PaperAirplaneIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">{isSendingWebhook ? 'Sending...' : 'Webhook'}</span>
-                <span className="sm:hidden">📤</span>
               </button>
 
               <button

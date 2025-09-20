@@ -1708,7 +1708,6 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
         onUpdateLead={handleUpdateLead}
         onOpenEditModal={handleOpenEditModal}
         onOpenAddNoteModal={handleOpenAddNoteModal}
-        onSendToWebhook={handleSendToWebhook}
         onGenerateInsights={handleGenerateInsights}
         onSendEmail={handleSendEmail}
         userEmail={currentUser?.email}
