@@ -259,6 +259,7 @@ const App: React.FC = () => {
         const elevenLabsData = await listResponse.json();
         const conversations = elevenLabsData.conversations || [];
         console.log(`📞 Background sync found ${conversations.length} conversations`);
+        console.log('🔍 Conversation IDs found:', conversations.map((c: any) => c.conversation_id));
         
         // Get current database leads to check for new ones
         const { data: databaseLeads } = await supabase
@@ -281,10 +282,13 @@ const App: React.FC = () => {
           console.log(`💾 Saving ${newConversations.length} new conversations to database`);
           
           const newLeadsData = newConversations.map((conv: any) => {
+            // Convert ElevenLabs timestamp to proper date
+            const callTime = new Date(conv.start_time_unix_secs * 1000);
+            
             const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
               companyId: currentCompany.id,
               firstName: 'Unknown',
-              lastName: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+              lastName: `Call (${callTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
               company: '',
               email: `${conv.conversation_id}@imported-lead.com`,
               phone: 'N/A',
@@ -310,6 +314,7 @@ const App: React.FC = () => {
           
           if (!insertError && insertedLeads) {
             console.log(`✅ Successfully saved ${insertedLeads.length} new leads to database`);
+            console.log('📋 Saved lead IDs:', insertedLeads.map(l => l.id));
             
             // Update UI with new leads if currently viewing leads
             const newFrontendLeads = insertedLeads.map(fromSupabase);
@@ -333,6 +338,7 @@ const App: React.FC = () => {
             }
           } else if (insertError) {
             console.error('❌ Error saving new leads:', insertError);
+            console.error('💥 Failed to save leads data:', newLeadsData.map(l => ({ id: l.source_conversation_id, email: l.email })));
           }
         } else {
           console.log('✅ No new conversations found');
