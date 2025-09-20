@@ -413,12 +413,14 @@ const App: React.FC = () => {
         }
       } else {
         const errorText = await listResponse.text();
-        console.error(`🚨 ElevenLabs sync failed with status ${listResponse.status}:`, errorText);
-        console.error('🔑 Session token:', session?.access_token ? 'Present' : 'Missing');
-        console.error('🏢 Company ID:', currentCompany?.id);
+        console.warn(`⚠️ ElevenLabs sync unavailable (${listResponse.status}): System will continue with form-only functionality`);
+        console.debug('ElevenLabs sync error details:', errorText);
+        // Don't log as error since the system should work without ElevenLabs
       }
     } catch (error) {
-      console.error('🚨 Background ElevenLabs sync failed:', error);
+      console.warn('⚠️ ElevenLabs integration unavailable - system will continue with form-only functionality');
+      console.debug('ElevenLabs sync error:', error);
+      // Don't throw error to prevent blocking the main application
     }
   }, [session, currentCompany, currentUser]);
 

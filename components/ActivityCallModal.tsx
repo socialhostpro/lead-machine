@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Lead, LeadStatus, LeadSource, Note, CallLog } from '../types';
 import { 
   XMarkIcon, 
@@ -20,6 +20,8 @@ import {
 import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
 import ElevenLabsAudioPlayer from './ElevenLabsAudioPlayer';
+import { getLocationFromAreaCode } from '../utils/areaCodeMapping';
+import { extractAreaCode } from '../utils/phoneUtils';
 
 interface ActivityCallModalProps {
   isOpen: boolean;
@@ -64,7 +66,67 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   const [callTimer, setCallTimer] = useState<NodeJS.Timeout | null>(null);
   const [autoStopTimer, setAutoStopTimer] = useState<NodeJS.Timeout | null>(null);
 
-  if (!isOpen || !lead) return null;
+  // Get location from phone number
+  const getPhoneLocation = (phone: string | undefined) => {
+    if (!phone) return null;
+    return getLocationFromAreaCode(phone);
+  };
+
+  const phoneLocation = getPhoneLocation(lead?.phone);
+
+  // Define handleEndCall first so it can be used in useEffect
+  const handleEndCall = useCallback(async () => {
+    if (callTimer) {
+      clearInterval(callTimer);
+      setCallTimer(null);
+    }
+    
+    if (autoStopTimer) {
+      clearTimeout(autoStopTimer);
+      setAutoStopTimer(null);
+    }
+    
+    const endTime = new Date();
+    const duration = callStartTime ? Math.floor((endTime.getTime() - callStartTime.getTime()) / 1000) : 0;
+    
+    setIsCallActive(false);
+    
+    // Only create call log if lead exists
+    if (!lead) return;
+    
+    // Create new call log entry
+    const newCallLog: CallLog = {
+      startTime: callStartTime?.toISOString() || endTime.toISOString(),
+      endTime: endTime.toISOString(),
+      duration: duration,
+      type: 'outgoing',
+      status: duration > 0 ? 'completed' : 'cancelled'
+    };
+    
+    // Get existing call history
+    const existingHistory = lead.callDetails?.callHistory || [];
+    
+    // Update lead with call information
+    const updatedLead = {
+      ...lead,
+      status: LeadStatus.CONTACTED,
+      lastContactedAt: endTime.toISOString(),
+      callDetails: {
+        ...lead.callDetails,
+        conversationId: lead.callDetails?.conversationId || '',
+        summaryTitle: lead.callDetails?.summaryTitle || 'Phone Call',
+        transcriptSummary: lead.callDetails?.transcriptSummary || '',
+        lastOutgoingCall: newCallLog,
+        callHistory: [newCallLog, ...existingHistory].slice(0, 10) // Keep last 10 calls
+      }
+    };
+    
+    onUpdateLead(updatedLead);
+    
+    // Reset call state
+    setCallStartTime(null);
+    setCallDuration(0);
+  }, [callTimer, autoStopTimer, callStartTime, lead, onUpdateLead]);
 
   // Cleanup call timer when component unmounts or modal closes
   useEffect(() => {
@@ -83,7 +145,9 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
     if (!isOpen && isCallActive) {
       handleEndCall();
     }
-  }, [isOpen]);
+  }, [isOpen, isCallActive, handleEndCall]);
+
+  if (!isOpen || !lead) return null;
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onUpdateLead({ ...lead, status: e.target.value as LeadStatus });
@@ -133,56 +197,6 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
     if (lead.phone) {
       window.open(`tel:${lead.phone}`, '_self');
     }
-  };
-  
-  const handleEndCall = async () => {
-    if (callTimer) {
-      clearInterval(callTimer);
-      setCallTimer(null);
-    }
-    
-    if (autoStopTimer) {
-      clearTimeout(autoStopTimer);
-      setAutoStopTimer(null);
-    }
-    
-    const endTime = new Date();
-    const duration = callStartTime ? Math.floor((endTime.getTime() - callStartTime.getTime()) / 1000) : 0;
-    
-    setIsCallActive(false);
-    
-    // Create new call log entry
-    const newCallLog: CallLog = {
-      startTime: callStartTime?.toISOString() || endTime.toISOString(),
-      endTime: endTime.toISOString(),
-      duration: duration,
-      type: 'outgoing',
-      status: duration > 0 ? 'completed' : 'cancelled'
-    };
-    
-    // Get existing call history
-    const existingHistory = lead.callDetails?.callHistory || [];
-    
-    // Update lead with call information
-    const updatedLead = {
-      ...lead,
-      status: LeadStatus.CONTACTED,
-      lastContactedAt: endTime.toISOString(),
-      callDetails: {
-        ...lead.callDetails,
-        conversationId: lead.callDetails?.conversationId || '',
-        summaryTitle: lead.callDetails?.summaryTitle || 'Phone Call',
-        transcriptSummary: lead.callDetails?.transcriptSummary || '',
-        lastOutgoingCall: newCallLog,
-        callHistory: [newCallLog, ...existingHistory].slice(0, 10) // Keep last 10 calls
-      }
-    };
-    
-    onUpdateLead(updatedLead);
-    
-    // Reset call state
-    setCallStartTime(null);
-    setCallDuration(0);
   };
   
   const formatCallDuration = (seconds: number): string => {
@@ -260,40 +274,40 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   const isUnknownIncomingCall = isCall && lead.firstName === 'Unknown' && lead.callDetails?.summaryTitle;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60]" role="dialog" aria-modal="true">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] m-4 relative animate-fade-in-up overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-2 sm:p-4" role="dialog" aria-modal="true">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] relative animate-fade-in-up overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center space-x-3">
-            <div className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+            <div className="bg-slate-200 dark:bg-slate-700 p-1.5 sm:p-2 rounded-full flex-shrink-0">
               {isCall ? (
-                <PhoneIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <PhoneIcon className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600 dark:text-teal-400" />
               ) : (
-                <UserIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600 dark:text-teal-400" />
               )}
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
                 {isUnknownIncomingCall ? lead.callDetails!.summaryTitle : `${lead.firstName} ${lead.lastName}`}
               </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 truncate">
                 {isCall ? 'Incoming Call' : 'Lead'} • {new Date(lead.createdAt).toLocaleString()}
               </p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors flex-shrink-0 ml-2"
             title="Close modal"
             aria-label="Close modal"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Left Column - Contact Info */}
             <div className="space-y-4">
               {/* Contact Information */}
@@ -338,12 +352,19 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                   {/* Phone */}
                   {lead.phone && (
                     <div className="space-y-2">
-                      <div className="flex items-center space-x-3">
-                        <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                        <span className="text-slate-800 dark:text-white">{lead.phone}</span>
+                      <div className="flex items-start space-x-3">
+                        <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-slate-800 dark:text-white">{lead.phone}</div>
+                          {phoneLocation && (
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                              📍 {phoneLocation.city}, {phoneLocation.state}
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={() => handleCopy(lead.phone, 'phone')}
-                          className="p-1 text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors"
+                          className="p-1 text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors flex-shrink-0"
                           title="Copy phone"
                         >
                           {copiedItem === 'phone' ? (
@@ -354,7 +375,7 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                         </button>
                         <button
                           onClick={handleDialNumber}
-                          className={`p-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+                          className={`p-2 rounded-lg font-medium transition-colors flex items-center space-x-2 flex-shrink-0 ${
                             isCallActive 
                               ? 'bg-red-600 hover:bg-red-700 text-white' 
                               : 'bg-green-600 hover:bg-green-700 text-white'
@@ -649,12 +670,12 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="border-t border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex flex-wrap gap-3 justify-between">
-            <div className="flex flex-wrap gap-3">
+        <div className="border-t border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-between">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={() => onOpenEditModal(lead)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
               >
                 <PencilIcon className="w-4 h-4" />
                 <span>Edit</span>
@@ -662,7 +683,7 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
               
               <button
                 onClick={() => onOpenAddNoteModal(lead)}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm"
               >
                 <ChatBubbleLeftIcon className="w-4 h-4" />
                 <span>Add Note</span>
@@ -672,7 +693,7 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                 <button
                   onClick={handleEmailClick}
                   disabled={isSendingEmail}
-                  className="flex items-center space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-lg transition-colors"
+                  className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-lg transition-colors text-sm"
                 >
                   <EnvelopeIcon className="w-4 h-4" />
                   <span>{isSendingEmail ? 'Sending...' : 'Send Email'}</span>
@@ -680,10 +701,10 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={handleContactAction}
-                className="flex items-center space-x-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors text-sm"
               >
                 <PhoneIcon className="w-4 h-4" />
                 <span>Mark Contacted</span>
@@ -692,7 +713,7 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
               <button
                 onClick={handleWebhookClick}
                 disabled={isSendingWebhook}
-                className="flex items-center space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition-colors"
+                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition-colors text-sm"
               >
                 <PaperAirplaneIcon className="w-4 h-4" />
                 <span>{isSendingWebhook ? 'Sending...' : 'Send Webhook'}</span>

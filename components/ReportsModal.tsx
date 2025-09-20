@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Lead } from '../types';
 import { LeadAnalyticsEngine, LeadAnalytics } from '../utils/leadAnalytics';
-import { XMarkIcon, ArrowDownTrayIcon, ChartBarIcon, TrendingUpIcon, TrendingDownIcon, MinusIcon, PrinterIcon } from './icons';
+import { XMarkIcon, ArrowDownTrayIcon, ChartBarIcon, TrendingUpIcon, TrendingDownIcon, MinusIcon, PrinterIcon, ArrowPathIcon } from './icons';
+import GeographicAnalytics from './GeographicAnalytics';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -13,11 +14,16 @@ interface ReportsModalProps {
 }
 
 const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, timePeriod }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'sources' | 'trends' | 'recommendations'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sources' | 'trends' | 'recommendations' | 'geographic'>('overview');
+  const [refreshKey, setRefreshKey] = useState(0);
   
   const analytics = useMemo(() => {
     return LeadAnalyticsEngine.generateComprehensiveReport(leads, timePeriod);
-  }, [leads, timePeriod]);
+  }, [leads, timePeriod, refreshKey]);
+
+  const handleRefreshReport = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   const handleExportReport = () => {
     const reportData = {
@@ -188,6 +194,14 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, tim
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleRefreshReport}
+              className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              title="Refresh Report"
+            >
+              <ArrowPathIcon className="w-4 h-4" />
+              Refresh
+            </button>
+            <button
               onClick={handleExportPDF}
               className="flex items-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
             >
@@ -218,6 +232,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, tim
               { id: 'overview', label: 'Overview' },
               { id: 'sources', label: 'Source Analysis' },
               { id: 'trends', label: 'Trends' },
+              { id: 'geographic', label: 'Geographic' },
               { id: 'recommendations', label: 'AI Recommendations' }
             ].map((tab) => (
               <button
@@ -363,6 +378,10 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, tim
                 </table>
               </div>
             </div>
+          )}
+
+          {activeTab === 'geographic' && (
+            <GeographicAnalytics leads={leads} />
           )}
 
           {activeTab === 'recommendations' && (

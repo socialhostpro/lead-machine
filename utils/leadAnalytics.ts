@@ -1,4 +1,5 @@
 import { Lead, LeadStatus } from '../types';
+import { getAreaCodeStats, getLocationFromAreaCode } from './areaCodeMapping';
 
 export interface LeadAnalytics {
   overview: {
@@ -349,6 +350,35 @@ export class LeadAnalyticsEngine {
       recommendations.push(`${staleLeads.length} leads haven't been contacted in over 7 days. Implement a systematic follow-up schedule to maintain engagement.`);
     }
 
+    // Geographic insights and recommendations
+    const locationStats = getAreaCodeStats(leads);
+    if (locationStats.length > 0) {
+      const topLocation = locationStats[0];
+      const locationsWithGoodConversion = locationStats.filter(stat => {
+        const locationLeads = leads.filter(lead => {
+          if (!lead.phone) return false;
+          const areaCode = lead.phone.replace(/\D/g, '').slice(1, 4);
+          const location = getLocationFromAreaCode(areaCode);
+          return location && location.city === stat.location.city && location.state === stat.location.state;
+        });
+        const conversions = locationLeads.filter(l => l.status === LeadStatus.CLOSED_WON).length;
+        return locationLeads.length > 0 && (conversions / locationLeads.length) > 0.15; // 15% or better
+      });
+
+      if (topLocation.percentage > 30) {
+        recommendations.push(`${topLocation.location.city}, ${topLocation.location.state} represents ${topLocation.percentage.toFixed(1)}% of your calls. Consider targeted marketing in this geographic area.`);
+      }
+
+      if (locationsWithGoodConversion.length > 0 && locationsWithGoodConversion.length < locationStats.length * 0.5) {
+        const topPerformingLocation = locationsWithGoodConversion[0];
+        recommendations.push(`${topPerformingLocation.location.city}, ${topPerformingLocation.location.state} shows strong conversion potential. Consider expanding marketing efforts in similar geographic markets.`);
+      }
+
+      if (locationStats.length >= 10) {
+        recommendations.push(`Strong geographic diversity with ${locationStats.length} unique locations. Consider regional analysis to optimize marketing spend by area.`);
+      }
+    }
+
     // Conversion rate recommendations
     const conversionRate = (leads.filter(l => l.status === LeadStatus.CLOSED_WON).length / totalLeads) * 100;
     if (conversionRate < 10) {
@@ -399,6 +429,30 @@ export class LeadAnalyticsEngine {
     if (recentLeads.length > 0) {
       const recentPercentage = (recentLeads.length / totalLeads) * 100;
       insights.push(`${recentPercentage.toFixed(1)}% of leads were generated in the last 30 days, showing ${recentPercentage > 50 ? 'strong' : recentPercentage > 25 ? 'moderate' : 'low'} recent activity.`);
+    }
+
+    // Geographic insights
+    const locationStats = getAreaCodeStats(leads);
+    const leadsWithLocation = leads.filter(lead => {
+      if (!lead.phone) return false;
+      const areaCode = lead.phone.replace(/\D/g, '').slice(1, 4);
+      return getLocationFromAreaCode(areaCode) !== null;
+    });
+    
+    if (locationStats.length > 0) {
+      const coveragePercentage = (leadsWithLocation.length / totalLeads) * 100;
+      insights.push(`Geographic coverage: ${coveragePercentage.toFixed(1)}% of leads have identifiable location data from ${locationStats.length} unique cities.`);
+      
+      if (locationStats.length >= 5) {
+        const topLocation = locationStats[0];
+        insights.push(`${topLocation.location.city}, ${topLocation.location.state} is your top market with ${topLocation.count} calls (${topLocation.percentage.toFixed(1)}% of total).`);
+        
+        // Regional diversity insight
+        const states = new Set(locationStats.map(stat => stat.location.state));
+        insights.push(`Geographic reach spans ${states.size} states/provinces, indicating ${states.size >= 10 ? 'excellent' : states.size >= 5 ? 'good' : 'limited'} market diversification.`);
+      }
+    } else {
+      insights.push('Geographic tracking could be improved by ensuring phone numbers are properly formatted for location analysis.');
     }
 
     // Value insights - removed since Lead doesn't have value property

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lead } from '../types';
+import { Lead, User, Company } from '../types';
 import LeadCard from './LeadCard';
 import { ChevronDownIcon, ChevronRightIcon, PhoneIcon } from './icons';
 
@@ -17,6 +17,8 @@ interface ReturningCallerStackProps {
   onOpenActivityModal?: (leadId: string) => void;
   userEmail?: string;
   companyId?: string;
+  currentUser?: User;
+  currentCompany?: Company;
 }
 
 const ReturningCallerStack: React.FC<ReturningCallerStackProps> = ({
@@ -32,7 +34,9 @@ const ReturningCallerStack: React.FC<ReturningCallerStackProps> = ({
   onOpenDetailedInsights,
   onOpenActivityModal,
   userEmail,
-  companyId
+  companyId,
+  currentUser,
+  currentCompany
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -89,6 +93,8 @@ const ReturningCallerStack: React.FC<ReturningCallerStackProps> = ({
           onOpenActivityModal={onOpenActivityModal}
           userEmail={userEmail}
           companyId={companyId}
+          currentUser={currentUser}
+          currentCompany={currentCompany}
           isHighlighted={false}
         />
         
@@ -133,6 +139,8 @@ const ReturningCallerStack: React.FC<ReturningCallerStackProps> = ({
                 onOpenActivityModal={onOpenActivityModal}
                 userEmail={userEmail}
                 companyId={companyId}
+                currentUser={currentUser}
+                currentCompany={currentCompany}
                 isHighlighted={false}
               />
             </div>

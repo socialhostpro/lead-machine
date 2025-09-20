@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lead, LeadStatus, LeadSource, Note } from '../types';
-import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon, PrinterIcon, ChevronDownIcon } from './icons';
+import { Lead, LeadStatus, LeadSource, Note, User, Company } from '../types';
+import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon, PrinterIcon, ChevronDownIcon, MapIcon } from './icons';
 import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
 import ConfirmationModal from './ConfirmationModal';
 import ElevenLabsAudioPlayer from './ElevenLabsAudioPlayer';
 import EmailModal from './EmailModal';
 import { getTimeBasedStatus, getTimeBasedColorClass, formatTimeDifference } from '../utils/callerTracking';
+import { getLocationFromAreaCode } from '../utils/areaCodeMapping';
+import { extractAreaCode } from '../utils/phoneUtils';
 
 interface LeadCardProps {
   lead: Lead;
@@ -23,9 +25,11 @@ interface LeadCardProps {
   isHighlighted?: boolean;
   userEmail?: string;
   companyId?: string;
+  currentUser?: User;
+  currentCompany?: Company;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenDetailedInsights, onOpenActivityModal, isHighlighted, userEmail, companyId }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenDetailedInsights, onOpenActivityModal, isHighlighted, userEmail, companyId, currentUser, currentCompany }) => {
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
@@ -36,6 +40,14 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Get location from phone number
+  const getPhoneLocation = (phone: string | undefined) => {
+    if (!phone) return null;
+    return getLocationFromAreaCode(phone);
+  };
+
+  const phoneLocation = getPhoneLocation(lead.phone);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -361,6 +373,44 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
     return email && email !== 'N/A' && !email.startsWith('conv_') && !email.includes('@imported-lead.com');
   };
 
+  // Calculate distance from business to lead location
+  const calculateDistance = (): string | null => {
+    const businessLat = currentUser?.business_latitude;
+    const businessLng = currentUser?.business_longitude;
+    
+    // Try to get lead coordinates from the database first
+    let leadLat = lead.caller_latitude;
+    let leadLng = lead.caller_longitude;
+    
+    // If no direct coordinates, try to get from phone location
+    if (!leadLat && !leadLng && phoneLocation?.areaCode) {
+      const coords = getLocationFromAreaCode(phoneLocation.areaCode);
+      if (coords) {
+        leadLat = coords.latitude;
+        leadLng = coords.longitude;
+      }
+    }
+    
+    if (!businessLat || !businessLng || !leadLat || !leadLng) {
+      return null;
+    }
+    
+    // Haversine formula for distance calculation
+    const R = 3959; // Earth's radius in miles
+    const dLat = (leadLat - businessLat) * Math.PI / 180;
+    const dLng = (leadLng - businessLng) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(businessLat * Math.PI / 180) * Math.cos(leadLat * Math.PI / 180) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c;
+    
+    return distance < 1 ? `${(distance * 5280).toFixed(0)} ft` : `${distance.toFixed(1)} mi`;
+  };
+
+  const distance = calculateDistance();
+
   const cardTitle = lead.source === LeadSource.INCOMING_CALL && lead.firstName === 'Unknown' && lead.callDetails?.summaryTitle
     ? lead.callDetails.summaryTitle
     : `${lead.firstName} ${lead.lastName}`;
@@ -390,34 +440,79 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
         </div>
 
         {/* Contact Info & Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <EnvelopeIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-            <span className="truncate text-slate-600 dark:text-slate-300" title={getDisplayEmail(lead.email)}>{getDisplayEmail(lead.email)}</span>
-            {isValidEmail(lead.email) && (
-              <>
-                <button onClick={() => handleCopy(lead.email, 'email')} title="Copy Email" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
-                    {copiedItem === 'email' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
+        <div className="flex gap-4 text-sm">
+          {/* Left side: Email, Phone, Location stacked */}
+          <div className="flex-1 space-y-2">
+            {/* Email */}
+            <div className="flex items-center gap-2">
+              <EnvelopeIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <span className="truncate text-slate-600 dark:text-slate-300" title={getDisplayEmail(lead.email)}>{getDisplayEmail(lead.email)}</span>
+              {isValidEmail(lead.email) && (
+                <>
+                  <button onClick={() => handleCopy(lead.email, 'email')} title="Copy Email" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
+                      {copiedItem === 'email' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
+                  </button>
+                  <a href={`mailto:${lead.email}`} onClick={() => setContactModalOpen(true)} title="Send Email" className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
+                      <EnvelopeIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
+                  </a>
+                </>
+              )}
+            </div>
+            
+            {/* Phone */}
+            <div className="flex items-center gap-2">
+              <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <span className="truncate text-slate-600 dark:text-slate-300">{lead.phone || 'N/A'}</span>
+              <button onClick={() => handleCopy(lead.phone || '', 'phone')} title="Copy Phone" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700" disabled={!lead.phone}>
+                  {copiedItem === 'phone' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
+              </button>
+            </div>
+            
+            {/* Location with distance */}
+            <div className="flex items-center gap-2">
+              <MapIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                {phoneLocation ? (
+                  <span className="text-slate-600 dark:text-slate-300 text-xs">
+                    {phoneLocation.city}, {phoneLocation.state}
+                    {distance && (
+                      <span className="ml-2 text-teal-600 dark:text-teal-400 font-medium">
+                        ({distance})
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 dark:text-slate-400 text-xs">Location unavailable</span>
+                )}
+              </div>
+              {(phoneLocation || distance) && (
+                <button 
+                  onClick={() => {
+                    const lat = lead.caller_latitude || (phoneLocation ? getLocationFromAreaCode(phoneLocation.areaCode)?.latitude : null);
+                    const lng = lead.caller_longitude || (phoneLocation ? getLocationFromAreaCode(phoneLocation.areaCode)?.longitude : null);
+                    if (lat && lng) {
+                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+                    }
+                  }}
+                  title="Get Directions" 
+                  className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+                >
+                  <MapIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
                 </button>
-                <a href={`mailto:${lead.email}`} onClick={() => setContactModalOpen(true)} title="Send Email" className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <EnvelopeIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
-                </a>
-              </>
-            )}
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-            <span className="truncate text-slate-600 dark:text-slate-300">{lead.phone || 'N/A'}</span>
-            <button onClick={() => handleCopy(lead.phone || '', 'phone')} title="Copy Phone" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700" disabled={!lead.phone}>
-                {copiedItem === 'phone' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
-            </button>
+          
+          {/* Right side: Call button */}
+          <div className="flex items-center">
             <button 
               onClick={() => onOpenActivityModal ? onOpenActivityModal(lead.id) : setContactModalOpen(true)} 
               title="Call" 
-              className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+              className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors font-medium text-sm flex items-center gap-2"
               disabled={!lead.phone}
             >
-                <PhoneIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
+                <PhoneIcon className="w-4 h-4"/>
+                Call
             </button>
           </div>
         </div>

@@ -82,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenForms,
   elevenlabsApiKey, onOpenActivityModal, onOpenDetailedInsights
 }) => {
-  const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>('All');
+  const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>(LeadStatus.NEW);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('callDate_desc');
   const [timePeriod, setTimePeriod] = useState<keyof typeof TIME_PERIODS>('all');
@@ -553,6 +553,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     companyId={currentCompany.id}
                                     onOpenDetailedInsights={onOpenDetailedInsights}
                                     onOpenActivityModal={onOpenActivityModal}
+                                    currentUser={currentUser}
+                                    currentCompany={currentCompany}
                                   />
                                 ) : (
                                   // Single lead
@@ -571,6 +573,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                       companyId={currentCompany.id}
                                       onOpenDetailedInsights={onOpenDetailedInsights}
                                       onOpenActivityModal={onOpenActivityModal}
+                                      currentUser={currentUser}
+                                      currentCompany={currentCompany}
                                   />
                                 )}
                             </div>

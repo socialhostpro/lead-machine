@@ -117,6 +117,14 @@ export interface Lead {
   aiInsights?: AIInsights | null;
   callerTracking?: CallerTracking;
   lastContactTime?: string; // For time-based color coding
+  // ElevenLabs and form tracking
+  elevenlabs_agent_id?: string;
+  form_id?: string;
+  // Geographic data
+  caller_latitude?: number;
+  caller_longitude?: number;
+  caller_address?: string;
+  distance_from_business?: number; // in miles
 }
 
 export enum UserRole {
@@ -143,6 +151,13 @@ export interface User {
     notification_volume?: number;              // FIXED: snake_case to match database
     new_lead_sound?: string;                   // FIXED: snake_case to match database
     email_sound?: string;                      // FIXED: snake_case to match database
+    // Business address for distance calculations and directions
+    business_address?: string;
+    business_city?: string;
+    business_state?: string;
+    business_zip_code?: string;
+    business_latitude?: number;
+    business_longitude?: number;
 }
 
 export interface WebFormField {
@@ -172,4 +187,47 @@ export interface WebForm {
     primaryColor: string;
     successMessage: string;
   };
+  elevenlabs_agent_id?: string; // Associated ElevenLabs agent
+}
+
+// ElevenLabs Agent interface
+export interface ElevenLabsAgent {
+  id: string;
+  company_id: string;
+  agent_id: string; // ElevenLabs agent ID
+  agent_name: string;
+  voice_id?: string;
+  personality_description?: string;
+  specialization?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// User AI Bot Context interface
+export interface UserAIBotContext {
+  id: string;
+  user_id: string;
+  company_id: string;
+  bot_name: string;
+  personality_prompt?: string;
+  knowledge_base_summary?: string;
+  conversation_style: 'professional' | 'casual' | 'technical' | 'friendly';
+  specializations: string[];
+  last_training_update: string;
+  total_vectors: number;
+  average_quality_score: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Geographic utilities interface
+export interface GeographicData {
+  latitude: number;
+  longitude: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
 }
