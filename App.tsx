@@ -74,8 +74,24 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
-  // NO CACHE - ALWAYS FRESH DATA
-  const [leads, setLeads] = useState<Lead[]>([]);
+  // Persistent leads state with localStorage
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    try {
+      const savedLeads = localStorage.getItem('leads-cache');
+      return savedLeads ? JSON.parse(savedLeads) : [];
+    } catch {
+      return [];
+    }
+  });
+  
+  // Update localStorage when leads change
+  useEffect(() => {
+    try {
+      localStorage.setItem('leads-cache', JSON.stringify(leads));
+    } catch (error) {
+      console.warn('Failed to save leads to localStorage:', error);
+    }
+  }, [leads]);
   
   const leadsRef = useRef(leads);
   useEffect(() => {
@@ -147,26 +163,22 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // NUCLEAR CACHE CLEARING - KILL EVERYTHING
-    console.log('🧹 CLEARING ALL BROWSER CACHE...');
+    // Clear old cache format to force refresh
+    const oldCacheKeys = Object.keys(localStorage).filter(key => key.includes('leads-'));
+    oldCacheKeys.forEach(key => localStorage.removeItem(key));
     
-    // Clear localStorage
-    try {
-      localStorage.clear();
-      console.log('✅ localStorage cleared');
-    } catch (e) {
-      console.log('❌ localStorage clear failed:', e);
-    }
-    
-    // Clear sessionStorage  
-    try {
-      sessionStorage.clear();
-      console.log('✅ sessionStorage cleared');
-    } catch (e) {
-      console.log('❌ sessionStorage clear failed:', e);
-    }
-    
-    // Unregister ALL service workers
+    (window as any).clearLeadsCache = () => {
+      // This will be called later when currentCompany is available
+      console.log('🗑️ clearLeadsCache function registered (call when currentCompany is set)');
+    };
+    (window as any).forceRefreshLeads = () => {
+      // This will be overridden later when fetchLeads is available
+      console.log('🔄 forceRefreshLeads function registered (call when fetchLeads is available)');
+    };
+  }, []); // Remove dependencies that aren't available yet
+
+  useEffect(() => {
+    // CRITICAL: Unregister any existing service workers to prevent CORS issues
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         for(let registration of registrations) {
@@ -175,30 +187,6 @@ const App: React.FC = () => {
         }
       });
     }
-    
-    // Clear cache API if available
-    if ('caches' in window) {
-      caches.keys().then(function(cacheNames) {
-        return Promise.all(
-          cacheNames.map(function(cacheName) {
-            console.log('🗑️ Deleting cache:', cacheName);
-            return caches.delete(cacheName);
-          })
-        );
-      });
-    }
-    
-    console.log('🚀 ALL CACHE CLEARED - FRESH START!');
-  }, []);
-
-  useEffect(() => {
-    // NO CACHE - removed all cache logic
-    (window as any).forceRefreshLeads = () => {
-      if (currentCompany) {
-        fetchLeads(true);
-      }
-    };
-  }, [currentCompany, fetchLeads]);
     
     const fetchInitialData = async () => {
       if (!session) {
@@ -256,38 +244,165 @@ const App: React.FC = () => {
     
     try {
       console.log('🔄 Background ElevenLabs sync started...');
-      const syncResponse = await fetch(`${SUPABASE_URL}/functions/v1/sync-leads`, {
-          method: 'POST',
+      const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
           headers: { 
             'Authorization': `Bearer ${session?.access_token}`,
             'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({})
+          }
       });
       
-      if (syncResponse.ok) {
-        const syncResult = await syncResponse.json();
-        console.log(`✅ Sync completed: ${syncResult.newLeads} new leads, ${syncResult.updatedLeads} updated`);
+      if (listResponse.ok) {
+        const elevenLabsData = await listResponse.json();
+        const conversations = elevenLabsData.conversations || [];
+        console.log(`📞 Background sync found ${conversations.length} conversations`);
+        console.log('🔍 Raw ElevenLabs data structure:', elevenLabsData);
+        if (conversations.length > 0) {
+          console.log('🔍 First conversation sample:', conversations[0]);
+        }
         
-        // Force refresh leads data after sync
-        const { data: freshLeads } = await supabase
+        // Get current database leads to check for new ones
+        const { data: databaseLeads } = await supabase
           .from('leads')
           .select('*')
           .eq('company_id', currentCompany.id)
           .order('created_at', { ascending: false });
         
-        if (freshLeads) {
-          const frontendLeads = freshLeads.map(fromSupabase);
-          setLeads(frontendLeads);
-          console.log(`🔄 Refreshed leads: ${frontendLeads.length} total leads`);
+        const existingConversationIds = new Set(
+          (databaseLeads || [])
+            .filter(l => l.source === LeadSource.INCOMING_CALL && l.source_conversation_id)
+            .map(l => l.source_conversation_id)
+        );
+        
+        const newConversations = conversations.filter((conv: any) => 
+          !existingConversationIds.has(conv.conversation_id)
+        );
+        
+        if (newConversations.length > 0) {
+          console.log(`💾 Saving ${newConversations.length} new conversations to database`);
+          
+          const newLeadsData = newConversations.map((conv: any) => {
+            // Extract caller name from summary title or transcript if available
+            let firstName = 'Unknown';
+            let lastName = 'Caller';
+            let phone = 'N/A';
+            
+            if (conv.summary_title) {
+              const nameMatch = conv.summary_title.match(/^([A-Za-z]+)\s+([A-Za-z]+)/);
+              if (nameMatch) {
+                firstName = nameMatch[1];
+                lastName = nameMatch[2];
+              } else {
+                // If no full name match, use the whole title as lastName
+                lastName = conv.summary_title;
+                firstName = 'Unknown';
+              }
+            } else if (conv.transcript_summary) {
+              // Try to extract name from transcript summary
+              const nameMatch = conv.transcript_summary.match(/(?:caller|user|customer)\s+(?:named\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
+              if (nameMatch) {
+                const fullName = nameMatch[1].split(' ');
+                firstName = fullName[0];
+                lastName = fullName[1] || 'Caller';
+              }
+            }
+            
+            // Extract phone number from conversation data
+            if (conv.caller_number || conv.phone_number || conv.from_number) {
+              phone = conv.caller_number || conv.phone_number || conv.from_number;
+            } else if (conv.metadata && conv.metadata.caller_number) {
+              phone = conv.metadata.caller_number;
+            } else if (conv.transcript_summary) {
+              // Try to extract phone number from transcript
+              const phoneMatch = conv.transcript_summary.match(/(\d{3}[-.]?\d{3}[-.]?\d{4})/);
+              if (phoneMatch) {
+                phone = phoneMatch[1];
+              }
+            }
+            
+            // Extract email from conversation data
+            let email = `${conv.conversation_id}@imported-lead.com`; // Default placeholder
+            
+            // Try to find real email in conversation data
+            if (conv.caller_email || conv.email_address || conv.email) {
+              email = conv.caller_email || conv.email_address || conv.email;
+            } else if (conv.metadata && conv.metadata.caller_email) {
+              email = conv.metadata.caller_email;
+            } else if (conv.transcript_summary) {
+              // Try to extract email from transcript
+              const emailMatch = conv.transcript_summary.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+              if (emailMatch) {
+                email = emailMatch[1];
+              }
+            }
+            
+            const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
+              companyId: currentCompany.id,
+              firstName: firstName,
+              lastName: lastName,
+              company: '',
+              email: email,
+              phone: phone,
+              status: LeadStatus.NEW,
+              notes: [],
+              source: LeadSource.INCOMING_CALL,
+              callDetails: {
+                conversationId: conv.conversation_id,
+                summaryTitle: conv.summary_title || 'ElevenLabs Conversation',
+                transcriptSummary: conv.transcript_summary || 'ElevenLabs conversation',
+                callStartTime: conv.start_time_unix_secs ? new Date(conv.start_time_unix_secs * 1000).toISOString() : undefined,
+                callDuration: conv.call_duration_secs
+              },
+              issueDescription: conv.transcript_summary || 'ElevenLabs conversation',
+              aiInsights: null
+            };
+            return toSupabase(leadForConversion);
+          });
+          
+          const { data: insertedLeads, error: insertError } = await supabase
+            .from('leads')
+            .insert(newLeadsData)
+            .select();
+          
+          if (!insertError && insertedLeads) {
+            console.log(`✅ Successfully saved ${insertedLeads.length} new leads to database`);
+            
+            // Update UI with new leads if currently viewing leads
+            const newFrontendLeads = insertedLeads.map(fromSupabase);
+            setLeads(prev => [...newFrontendLeads, ...prev]);
+            
+            // Play sound notification
+            if (currentUser) {
+              const soundPreferences = {
+                enabled: currentUser.sound_notifications_enabled ?? true,
+                volume: currentUser.notification_volume ?? 0.7,
+                newLeadSound: currentUser.new_lead_sound ?? 'notification',
+                emailSound: currentUser.email_sound ?? 'email'
+              };
+              
+              if (newFrontendLeads.length === 1) {
+                await playNewLeadSound(soundPreferences);
+              } else if (newFrontendLeads.length > 1) {
+                await playNewLeadSound(soundPreferences);
+                console.log(`🔔 ${newFrontendLeads.length} new leads detected!`);
+              }
+            }
+          } else if (insertError) {
+            console.error('❌ Error saving new leads:', insertError);
+          }
+        } else {
+          console.log('✅ No new conversations found');
         }
       } else {
-        console.error('❌ Sync failed:', await syncResponse.text());
+        const errorText = await listResponse.text();
+        console.error(`🚨 ElevenLabs sync failed with status ${listResponse.status}:`, errorText);
+        console.error('🔑 Session token:', session?.access_token ? 'Present' : 'Missing');
+        console.error('🏢 Company ID:', currentCompany?.id);
       }
     } catch (error) {
-      console.error('🚨 ElevenLabs sync error:', error);
+      console.error('🚨 Background ElevenLabs sync failed:', error);
     }
-  }, [session, currentCompany]);
+  }, [session, currentCompany, currentUser]);
+
   // Set up background sync interval (every 5 minutes)
   useEffect(() => {
     if (!session || !currentCompany) return;
@@ -312,12 +427,26 @@ const App: React.FC = () => {
       return;
     }
 
-    // ALWAYS FETCH FRESH - NO CACHE
+    // Check cache freshness (5 minutes)
+    const cacheKey = `leads-last-fetch-${currentCompany.id}`;
+    const lastFetchTime = localStorage.getItem(cacheKey);
+    const now = Date.now();
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    
+    if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
+      console.log('Using cached leads data (background sync handles ElevenLabs)');
+      setIsLeadsLoading(false);
+      // Force background sync to run immediately if not already running
+      setTimeout(() => syncElevenLabsInBackground(), 1000);
+      return;
+    }
+
     setIsLeadsLoading(true);
     
+    // Show loading toast for manual refresh
+    let loadingToast: string | null = null;
     if (forceRefresh) {
-      toast.info('Refreshing leads...', { duration: 0 });
-    }
+      loadingToast = toast.info('Refreshing leads...', { duration: 0 });
     }
 
     try {
@@ -369,30 +498,83 @@ const App: React.FC = () => {
           if (newConversations.length > 0) {
             console.log(`Saving ${newConversations.length} new conversations to database`);
             
-            const newLeadsData = newConversations.map((conv: any) => {
-              const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
-                companyId: currentCompany.id,
-                firstName: 'Unknown',
-                lastName: `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-                company: '',
-                email: `${conv.conversation_id}@imported-lead.com`,
-                phone: 'N/A',
-                status: LeadStatus.NEW,
-                notes: [],
-                source: LeadSource.INCOMING_CALL,
-                callDetails: {
-                  conversationId: conv.conversation_id,
-                  summaryTitle: 'ElevenLabs Conversation',
-                  transcriptSummary: conv.transcript_summary || 'ElevenLabs conversation'
-                },
-                issueDescription: conv.transcript_summary || 'ElevenLabs conversation',
-                hasAudio: conv.has_audio || false,
-                aiInsights: null
-              };
-              return toSupabase(leadForConversion);
-            });
+          const newLeadsData = newConversations.map((conv: any) => {
+            // Extract caller name from summary title or transcript if available
+            let firstName = 'Unknown';
+            let lastName = 'Caller';
+            let phone = 'N/A';
             
-            const { data: insertedLeads, error: insertError } = await supabase
+            if (conv.summary_title) {
+              const nameMatch = conv.summary_title.match(/^([A-Za-z]+)\s+([A-Za-z]+)/);
+              if (nameMatch) {
+                firstName = nameMatch[1];
+                lastName = nameMatch[2];
+              } else {
+                // If no full name match, use the whole title as lastName
+                lastName = conv.summary_title;
+                firstName = 'Unknown';
+              }
+            } else if (conv.transcript_summary) {
+              // Try to extract name from transcript summary
+              const nameMatch = conv.transcript_summary.match(/(?:caller|user|customer)\s+(?:named\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
+              if (nameMatch) {
+                const fullName = nameMatch[1].split(' ');
+                firstName = fullName[0];
+                lastName = fullName[1] || 'Caller';
+              }
+            }
+            
+            // Extract phone number from conversation data
+            if (conv.caller_number || conv.phone_number || conv.from_number) {
+              phone = conv.caller_number || conv.phone_number || conv.from_number;
+            } else if (conv.metadata && conv.metadata.caller_number) {
+              phone = conv.metadata.caller_number;
+            } else if (conv.transcript_summary) {
+              // Try to extract phone number from transcript
+              const phoneMatch = conv.transcript_summary.match(/(\d{3}[-.]?\d{3}[-.]?\d{4})/);
+              if (phoneMatch) {
+                phone = phoneMatch[1];
+              }
+            }
+            
+            // Extract email from conversation data
+            let email = `${conv.conversation_id}@imported-lead.com`; // Default placeholder
+            
+            // Try to find real email in conversation data
+            if (conv.caller_email || conv.email_address || conv.email) {
+              email = conv.caller_email || conv.email_address || conv.email;
+            } else if (conv.metadata && conv.metadata.caller_email) {
+              email = conv.metadata.caller_email;
+            } else if (conv.transcript_summary) {
+              // Try to extract email from transcript
+              const emailMatch = conv.transcript_summary.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+              if (emailMatch) {
+                email = emailMatch[1];
+              }
+            }
+            
+            const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
+              companyId: currentCompany.id,
+              firstName: firstName,
+              lastName: lastName,
+              company: '',
+              email: email,
+              phone: phone,
+              status: LeadStatus.NEW,
+              notes: [],
+              source: LeadSource.INCOMING_CALL,
+              callDetails: {
+                conversationId: conv.conversation_id,
+                summaryTitle: conv.summary_title || 'ElevenLabs Conversation',
+                transcriptSummary: conv.transcript_summary || 'ElevenLabs conversation',
+                callStartTime: conv.start_time_unix_secs ? new Date(conv.start_time_unix_secs * 1000).toISOString() : undefined,
+                callDuration: conv.call_duration_secs
+              },
+              issueDescription: conv.transcript_summary || 'ElevenLabs conversation',
+              aiInsights: null
+            };
+            return toSupabase(leadForConversion);
+          });            const { data: insertedLeads, error: insertError } = await supabase
               .from('leads')
               .insert(newLeadsData)
               .select();
@@ -418,6 +600,36 @@ const App: React.FC = () => {
                   // For multiple leads, play sound once then show count in console
                   await playNewLeadSound(soundPreferences);
                   console.log(`🔔 ${newFrontendLeads.length} new leads detected!`);
+                }
+                
+                // SEND EMAIL NOTIFICATIONS for new leads
+                try {
+                  if (currentUser.email_notifications_enabled !== false) {
+                    const emailConfig = await getEmailNotificationConfig(currentUser.companyId);
+                    
+                    for (const newLead of newFrontendLeads) {
+                      const leadMessage = `A new lead has been received:
+                        
+Name: ${newLead.firstName} ${newLead.lastName}
+Phone: ${newLead.phone !== 'N/A' ? newLead.phone : 'Not provided'}
+Email: ${newLead.email && !newLead.email.includes('@imported-lead.com') ? newLead.email : 'Not provided'}
+Source: ${newLead.source}
+${newLead.callDetails?.callStartTime ? `Call Time: ${new Date(newLead.callDetails.callStartTime).toLocaleString()}` : `Created: ${new Date(newLead.createdAt).toLocaleString()}`}
+
+${newLead.issueDescription ? `Issue: ${newLead.issueDescription}` : ''}
+
+Please log in to the Lead Machine to review and respond to this lead.`;
+
+                      await sendNewMessageNotification(
+                        newLead.id,
+                        leadMessage,
+                        [currentUser.email]
+                      );
+                    }
+                    console.log(`📧 Email notifications sent for ${newFrontendLeads.length} new lead(s)`);
+                  }
+                } catch (error) {
+                  console.error('Failed to send email notifications for new leads:', error);
                 }
               }
             } else if (insertError) {
@@ -459,21 +671,250 @@ const App: React.FC = () => {
         setIsLeadsLoading(false);
     }
     
-    // NO CACHE UPDATES
+    // Update cache timestamp
+    localStorage.setItem(cacheKey, now.toString());
   }, [currentCompany, session]);
 
-  // Manual refresh that includes ElevenLabs sync
-  const refreshLeadsWithSync = useCallback(async () => {
-    console.log('🔄 Manual refresh with ElevenLabs sync...');
+  // Manual phone number update function for testing
+  const updatePhoneNumbers = useCallback(async () => {
+    if (!session || !currentCompany) return;
     
-    // First trigger ElevenLabs sync
-    await syncElevenLabsInBackground();
+    console.log('🔄 Manual phone number update started...');
     
-    // Then fetch fresh data (force refresh)
-    await fetchLeads(true);
+    try {
+      const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
+          headers: { 
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json'
+          }
+      });
+      
+      if (listResponse.ok) {
+        const elevenLabsData = await listResponse.json();
+        const conversations = elevenLabsData.conversations || [];
+        
+        console.log('🔍 Full ElevenLabs response:', elevenLabsData);
+        console.log('📞 Found conversations:', conversations.length);
+        
+        if (conversations.length > 0) {
+          console.log('🔍 Sample conversation structure:', JSON.stringify(conversations[0], null, 2));
+        }
+        
+        // Get all leads that need phone updates
+        const { data: allLeads } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('company_id', currentCompany.id)
+          .eq('source', LeadSource.INCOMING_CALL);
+        
+        console.log('📋 Found leads to update:', allLeads?.length || 0);
+        
+        // Try to match conversations to leads and update phones
+        for (const lead of allLeads || []) {
+          const conversation = conversations.find((conv: any) => 
+            conv.conversation_id === lead.source_conversation_id
+          );
+          
+          if (conversation) {
+            console.log(`🔍 Processing conversation ${conversation.conversation_id}`);
+            console.log('Available fields:', Object.keys(conversation));
+            
+            let phone = 'N/A';
+            let email = lead.email; // Keep existing email unless we find a better one
+            
+            // Try all possible phone fields
+            if (conversation.caller_number) {
+              phone = conversation.caller_number;
+              console.log(`📞 Found phone in caller_number: ${phone}`);
+            } else if (conversation.phone_number) {
+              phone = conversation.phone_number;
+              console.log(`📞 Found phone in phone_number: ${phone}`);
+            } else if (conversation.from_number) {
+              phone = conversation.from_number;
+              console.log(`📞 Found phone in from_number: ${phone}`);
+            } else if (conversation.metadata?.caller_number) {
+              phone = conversation.metadata.caller_number;
+              console.log(`📞 Found phone in metadata.caller_number: ${phone}`);
+            } else {
+              console.warn(`⚠️ No phone found for conversation ${conversation.conversation_id}`);
+            }
+            
+            // Try all possible email fields
+            if (conversation.caller_email) {
+              email = conversation.caller_email;
+              console.log(`📧 Found email in caller_email: ${email}`);
+            } else if (conversation.email_address) {
+              email = conversation.email_address;
+              console.log(`📧 Found email in email_address: ${email}`);
+            } else if (conversation.email) {
+              email = conversation.email;
+              console.log(`📧 Found email in email: ${email}`);
+            } else if (conversation.metadata?.caller_email) {
+              email = conversation.metadata.caller_email;
+              console.log(`📧 Found email in metadata.caller_email: ${email}`);
+            } else if (conversation.transcript_summary) {
+              // Try to extract email from transcript
+              const emailMatch = conversation.transcript_summary.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+              if (emailMatch) {
+                email = emailMatch[1];
+                console.log(`📧 Found email in transcript: ${email}`);
+              }
+            }
+            
+            // Update lead if we found new phone or email
+            const needsUpdate = (phone !== 'N/A' && phone !== lead.phone) || 
+                               (email !== lead.email && email && !email.includes('@imported-lead.com'));
+            
+            if (needsUpdate) {
+              const updateData: any = {};
+              if (phone !== 'N/A' && phone !== lead.phone) {
+                updateData.phone = phone;
+                console.log(`📞 Updating lead ${lead.id} phone from "${lead.phone}" to "${phone}"`);
+              }
+              if (email !== lead.email && email && !email.includes('@imported-lead.com')) {
+                updateData.email = email;
+                console.log(`📧 Updating lead ${lead.id} email from "${lead.email}" to "${email}"`);
+              }
+              
+              const { error } = await supabase
+                .from('leads')
+                .update(updateData)
+                .eq('id', lead.id);
+              
+              if (error) {
+                console.error('Error updating lead:', error);
+              } else {
+                console.log(`✅ Updated lead ${lead.id} successfully`);
+              }
+            }
+          }
+        }
+        
+        // Refresh the leads after updating
+        await fetchLeads();
+        console.log('✅ Manual phone update complete');
+      }
+    } catch (error) {
+      console.error('Error in manual phone update:', error);
+    }
+  }, [session, currentCompany, fetchLeads]);
+
+  // Function to update existing leads with missing phone numbers (now fetchLeads is available)
+  const updateExistingLeadsWithPhoneNumbers = useCallback(async () => {
+    if (!session || !currentCompany) return;
     
-    console.log('✅ Manual refresh with sync completed');
-  }, [syncElevenLabsInBackground, fetchLeads]);
+    try {
+      console.log('🔄 Updating existing leads with phone numbers...');
+      
+      // Get all leads that have conversation IDs but no phone numbers
+      const { data: leadsNeedingPhone } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .eq('source', LeadSource.INCOMING_CALL)
+        .not('source_conversation_id', 'is', null)
+        .or('phone.is.null,phone.eq.N/A');
+      
+      if (!leadsNeedingPhone || leadsNeedingPhone.length === 0) {
+        console.log('✅ No leads need phone number updates');
+        return;
+      }
+      
+      console.log(`📞 Found ${leadsNeedingPhone.length} leads that need phone numbers`);
+      
+      // Fetch ElevenLabs conversation data
+      const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
+        headers: { 
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!listResponse.ok) {
+        console.error('Failed to fetch ElevenLabs conversations for phone update');
+        return;
+      }
+      
+      const elevenLabsData = await listResponse.json();
+      const conversations = elevenLabsData.conversations || [];
+      
+      // Create a map of conversation ID to conversation data
+      const conversationMap = new Map();
+      conversations.forEach((conv: any) => {
+        conversationMap.set(conv.conversation_id, conv);
+      });
+      
+      // Update leads with phone numbers
+      const updates = [];
+      for (const lead of leadsNeedingPhone) {
+        const conv = conversationMap.get(lead.source_conversation_id);
+        if (conv) {
+          let phone = 'N/A';
+          
+          // Extract phone number using same logic as new leads
+          if (conv.caller_number || conv.phone_number || conv.from_number) {
+            phone = conv.caller_number || conv.phone_number || conv.from_number;
+          } else if (conv.metadata && conv.metadata.caller_number) {
+            phone = conv.metadata.caller_number;
+          } else if (conv.transcript_summary) {
+            const phoneMatch = conv.transcript_summary.match(/(\d{3}[-.]?\d{3}[-.]?\d{4})/);
+            if (phoneMatch) {
+              phone = phoneMatch[1];
+            }
+          }
+          
+          if (phone !== 'N/A') {
+            updates.push({
+              id: lead.id,
+              phone: phone
+            });
+          }
+        }
+      }
+      
+      if (updates.length > 0) {
+        console.log(`📱 Updating ${updates.length} leads with phone numbers`);
+        
+        // Update each lead individually
+        for (const update of updates) {
+          await supabase
+            .from('leads')
+            .update({ phone: update.phone })
+            .eq('id', update.id);
+        }
+        
+        console.log(`✅ Successfully updated ${updates.length} leads with phone numbers`);
+        
+        // Refresh the leads to show updated phone numbers
+        await fetchLeads(true);
+      } else {
+        console.log('📱 No phone numbers found to update');
+      }
+      
+    } catch (error) {
+      console.error('🚨 Error updating leads with phone numbers:', error);
+    }
+  }, [session, currentCompany, fetchLeads]);
+
+  // Set up global debugging functions after fetchLeads is available
+  useEffect(() => {
+    (window as any).clearLeadsCache = () => {
+      const cacheKey = `leads-last-fetch-${currentCompany?.id}`;
+      localStorage.removeItem(cacheKey);
+      localStorage.removeItem('leads-cache');
+      console.log('🗑️ Leads cache cleared! Refresh to fetch new data.');
+    };
+    (window as any).forceRefreshLeads = () => {
+      if (currentCompany && fetchLeads) {
+        fetchLeads(true);
+      }
+    };
+    (window as any).updatePhoneNumbers = () => {
+      if (currentCompany && updateExistingLeadsWithPhoneNumbers) {
+        updateExistingLeadsWithPhoneNumbers();
+      }
+    };
+  }, [currentCompany, fetchLeads]);
 
   const fetchForms = useCallback(async () => {
     if (!currentCompanyId) return;
@@ -490,6 +931,8 @@ const App: React.FC = () => {
     if (currentCompanyId) {
         fetchLeads();
         fetchForms();
+        // Update existing leads with missing phone numbers after initial load
+        setTimeout(() => updateExistingLeadsWithPhoneNumbers(), 2000);
     }
   }, [currentCompanyId]); // FIXED: Removed fetchLeads, fetchForms from deps to stop infinite re-renders
 
@@ -693,6 +1136,70 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSendEmail = async (lead: Lead) => {
+    if (!currentUser?.email) {
+        toast.error('User email is not available. Please check your profile settings.');
+        return;
+    }
+
+    try {
+        // Format call details for the email
+        const callTimeInfo = lead.callDetails?.callStartTime 
+            ? `Call received: ${new Date(lead.callDetails.callStartTime).toLocaleString()}`
+            : `Lead created: ${new Date(lead.createdAt).toLocaleString()}`;
+
+        const phoneInfo = lead.phone && lead.phone !== 'N/A' ? lead.phone : 'Not provided';
+        const emailInfo = lead.email && !lead.email.includes('@imported-lead.com') ? lead.email : 'Not provided';
+        
+        const leadSummary = `
+Lead Information:
+- Name: ${lead.firstName} ${lead.lastName}
+- Company: ${lead.company || 'Not provided'}
+- Phone: ${phoneInfo}
+- Email: ${emailInfo}
+- Status: ${lead.status}
+- Source: ${lead.source}
+- ${callTimeInfo}
+
+${lead.issueDescription ? `Issue Description:\n${lead.issueDescription}` : ''}
+
+${lead.callDetails?.transcriptSummary ? `Call Summary:\n${lead.callDetails.transcriptSummary}` : ''}
+
+${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${note.text}`).join('\n')}` : ''}
+        `.trim();
+
+        const { data, error } = await supabase.functions.invoke('sendgrid-notifications', {
+            body: {
+                type: 'lead_info',
+                messageData: {
+                    subject: `Lead Information: ${lead.firstName} ${lead.lastName} - ${lead.source}`,
+                    message: leadSummary,
+                    leadName: `${lead.firstName} ${lead.lastName}`,
+                    leadEmail: emailInfo,
+                    leadPhone: phoneInfo,
+                    leadCompany: lead.company,
+                    leadSource: lead.source,
+                    leadStatus: lead.status,
+                    leadId: lead.id
+                },
+                recipientEmails: [currentUser.email],
+                companyId: currentCompany.id
+            }
+        });
+
+        if (error) {
+            console.error('SendGrid API Error:', error);
+            toast.error(`Failed to send email: ${error.message}`);
+        } else {
+            console.log('Lead info email sent successfully:', data);
+            toast.success('Lead information emailed successfully!');
+        }
+    } catch (error: any) {
+        console.error('Error sending lead email:', error);
+        toast.error(`Failed to send email: ${error.message}`);
+    }
+  };
+
   const handleGenerateInsights = async (lead: Lead) => {
     try {
       const geminiApiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.GEMINI_API_KEY || 'AIzaSyAwq9uY0eLXN9ce8iiv1h19K9uJhU0QiqU';
@@ -871,7 +1378,7 @@ const App: React.FC = () => {
         onOpenProfile={() => setProfileModalOpen(true)}
         onOpenForms={() => setFormsModalOpen(true)}
         onToggleTheme={toggleTheme}
-        onRefreshLeads={refreshLeadsWithSync}
+        onRefreshLeads={fetchLeads}
         onOpenUserManagement={() => setUserManagementModalOpen(true)}
         onUpdateLead={handleUpdateLead}
         onDeleteLead={handleDeleteLead}
@@ -879,6 +1386,7 @@ const App: React.FC = () => {
         onOpenAddNoteModal={handleOpenAddNoteModal}
         onSendToWebhook={handleSendToWebhook}
         onGenerateInsights={handleGenerateInsights}
+        onSendEmail={handleSendEmail}
         onLogout={handleLogout}
         elevenlabsApiKey={undefined}
       />

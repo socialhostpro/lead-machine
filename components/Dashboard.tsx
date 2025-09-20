@@ -26,6 +26,7 @@ interface DashboardProps {
   onOpenAddNoteModal: (lead: Lead) => void;
   onSendToWebhook: (lead: Lead) => Promise<void>;
   onGenerateInsights: (lead: Lead) => Promise<void>;
+  onSendEmail: (lead: Lead) => Promise<void>;
   onOpenForms: () => void;
   elevenlabsApiKey?: string;
 }
@@ -62,7 +63,7 @@ const REFRESH_INTERVAL_SECONDS = 300; // 5 minutes
 const Dashboard: React.FC<DashboardProps> = ({ 
   leads, companies, currentCompany, currentUser, theme, isLoading,
   onCompanyChange, onAddNew, onOpenSettings, onOpenProfile, onToggleTheme, onRefreshLeads, onOpenUserManagement, onLogout,
-  onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onOpenForms,
+  onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenForms,
   elevenlabsApiKey
 }) => {
   const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>('All');
@@ -78,7 +79,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          onRefreshLeads();
+          onRefreshLeads(true); // Force refresh to get fresh data
           return REFRESH_INTERVAL_SECONDS;
         }
         return prev - 1;
@@ -246,8 +247,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const currentCompanyName = currentCompany?.name || 'Select Company';
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 text-slate-800 dark:text-white min-h-screen">
-      <div className="max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 md:p-8 text-slate-800 dark:text-white min-h-screen overflow-x-hidden">
+      <div className="max-w-7xl mx-auto min-w-0">
         <header className="flex flex-wrap gap-4 justify-between items-center mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
           <div className='flex items-center gap-4'>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Lead Machine</h1>
@@ -330,8 +331,8 @@ const Dashboard: React.FC<DashboardProps> = ({
             <StatCard title="Closed Won" value={stats.won} color="text-green-500 dark:text-green-400" />
         </div>
         
-        <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
+        <main className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+            <div className="lg:col-span-2 min-w-0 overflow-hidden">
                 <div className="mb-6">
                     <h2 className="text-xl font-semibold mb-4 text-slate-800 dark:text-white">Leads for {currentCompanyName}</h2>
                     <div className="flex flex-col md:flex-row gap-4 justify-between md:items-center mb-4">
@@ -404,22 +405,24 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 ) : paginatedLeads.length > 0 ? (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0">
                         {paginatedLeads.map(lead => (
-                            <LeadCard 
-                                key={lead.id} 
-                                lead={lead}
-                                isHighlighted={lead.id === highlightedLeadId}
-                                elevenlabsApiKey={elevenlabsApiKey}
-                                onUpdateLead={onUpdateLead}
-                                onDeleteLead={onDeleteLead}
-                                onOpenEditModal={onOpenEditModal}
-                                onOpenAddNoteModal={onOpenAddNoteModal}
-                                onSendToWebhook={onSendToWebhook}
-                                onGenerateInsights={onGenerateInsights}
-                                userEmail={currentUser.email}
-                                companyId={currentCompany.id}
-                            />
+                            <div key={lead.id} className="min-w-0">
+                                <LeadCard 
+                                    lead={lead}
+                                    isHighlighted={lead.id === highlightedLeadId}
+                                    elevenlabsApiKey={elevenlabsApiKey}
+                                    onUpdateLead={onUpdateLead}
+                                    onDeleteLead={onDeleteLead}
+                                    onOpenEditModal={onOpenEditModal}
+                                    onOpenAddNoteModal={onOpenAddNoteModal}
+                                    onSendToWebhook={onSendToWebhook}
+                                    onGenerateInsights={onGenerateInsights}
+                                    onSendEmail={onSendEmail}
+                                    userEmail={currentUser.email}
+                                    companyId={currentCompany.id}
+                                />
+                            </div>
                         ))}
                     </div>
                     <Pagination

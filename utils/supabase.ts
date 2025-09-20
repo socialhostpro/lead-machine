@@ -54,10 +54,6 @@ type LeadRow = {
   issue_description: string | null
   source_conversation_id: string | null
   ai_insights: Json | null
-  has_audio: boolean | null
-  has_user_audio: boolean | null
-  has_response_audio: boolean | null
-  is_deleted: boolean | null
 };
 
 // RENAMED from UserRow to ProfileRow to match the table name change.
@@ -166,7 +162,11 @@ export const fromSupabase = (lead: Database['public']['Tables']['leads']['Row'])
         conversationId: lead.source_conversation_id,
         agentId: 'default', // Will be enriched later if needed
         summaryTitle: lead.issue_description || 'ElevenLabs Call',
-        transcriptSummary: lead.issue_description || 'Call imported from ElevenLabs'
+        transcriptSummary: lead.issue_description || 'Call imported from ElevenLabs',
+        // @ts-ignore - These fields may not be in type definitions yet
+        callStartTime: lead.call_start_time || undefined,
+        // @ts-ignore - These fields may not be in type definitions yet
+        callDuration: lead.call_duration_secs || undefined
     } : undefined;
 
     return {
@@ -185,8 +185,7 @@ export const fromSupabase = (lead: Database['public']['Tables']['leads']['Row'])
         // FIX: Cast via 'unknown' for types that don't overlap sufficiently.
         notes: lead.notes ? (lead.notes as unknown as Note[]) : [],
         aiInsights: lead.ai_insights ? (lead.ai_insights as unknown as AIInsights) : null,
-        callDetails: callDetails,
-        hasAudio: lead.has_audio || false
+        callDetails: callDetails
     };
 };
 
@@ -205,9 +204,9 @@ export const toSupabase = (leadData: Omit<Lead, 'id' | 'createdAt'>): Database['
         issue_description: leadData.issueDescription ?? null,
         source_conversation_id: leadData.callDetails?.conversationId ?? null,
         ai_insights: leadData.aiInsights ? (leadData.aiInsights as unknown as Json) : null,
-        has_audio: leadData.hasAudio ?? false,
-        has_user_audio: false,
-        has_response_audio: false,
-        is_deleted: false
+        // @ts-ignore - These fields may not be in type definitions yet
+        call_start_time: leadData.callDetails?.callStartTime ?? null,
+        // @ts-ignore - These fields may not be in type definitions yet
+        call_duration_secs: leadData.callDetails?.callDuration ?? null
     };
 };

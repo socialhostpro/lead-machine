@@ -28,6 +28,8 @@ export interface CallDetails {
   agentId?: string;
   summaryTitle: string;
   transcriptSummary: string;
+  callStartTime?: string; // ISO timestamp from ElevenLabs start_time_unix_secs
+  callDuration?: number;  // Duration in seconds
 }
 
 export interface Company {
@@ -69,7 +71,6 @@ export interface Lead {
   source: LeadSource;
   callDetails?: CallDetails;
   issueDescription?: string;
-  hasAudio?: boolean;
   aiInsights?: AIInsights | null;
 }
 

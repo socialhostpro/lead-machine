@@ -16,18 +16,20 @@ interface LeadCardProps {
   onOpenAddNoteModal: (lead: Lead) => void;
   onSendToWebhook: (lead: Lead) => Promise<void>;
   onGenerateInsights: (lead: Lead) => Promise<void>;
+  onSendEmail?: (lead: Lead) => Promise<void>;
   isHighlighted?: boolean;
   userEmail?: string;
   companyId?: string;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, isHighlighted, userEmail, companyId }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, isHighlighted, userEmail, companyId }) => {
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
   const [copiedItem, setCopiedItem] = useState<'email' | 'phone' | null>(null);
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onUpdateLead({ ...lead, status: e.target.value as LeadStatus });
@@ -82,10 +84,37 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
     }
   };
 
+  const handleEmailClick = async () => {
+    if (onSendEmail) {
+      setIsSendingEmail(true);
+      try {
+        await onSendEmail(lead);
+      } finally {
+        setIsSendingEmail(false);
+      }
+    } else {
+      // Fallback to old modal behavior if no direct email function provided
+      setEmailModalOpen(true);
+    }
+  };
+
   const scoreColor = (score: number) => {
       if (score > 75) return 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-500/20';
       if (score > 40) return 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-500/20';
       return 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/20';
+  };
+
+  // Helper function to display email properly
+  const getDisplayEmail = (email: string) => {
+    if (!email || email === 'N/A' || email.startsWith('conv_') || email.includes('@imported-lead.com')) {
+      return 'None';
+    }
+    return email;
+  };
+
+  // Helper function to check if email is valid for actions
+  const isValidEmail = (email: string) => {
+    return email && email !== 'N/A' && !email.startsWith('conv_') && !email.includes('@imported-lead.com');
   };
 
   const cardTitle = lead.source === LeadSource.INCOMING_CALL && lead.firstName === 'Unknown' && lead.callDetails?.summaryTitle
@@ -94,34 +123,40 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
 
   return (
     <>
-      <div id={`lead-card-${lead.id}`} className={`bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-800 flex flex-col gap-4 transition-all duration-500 ${isHighlighted ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-slate-50 dark:dark:ring-offset-slate-900' : ''}`}>
+      <div id={`lead-card-${lead.id}`} className={`bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-800 flex flex-col gap-4 transition-all duration-500 overflow-hidden ${isHighlighted ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-slate-50 dark:dark:ring-offset-slate-900' : ''}`}>
         {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white truncate" title={cardTitle}>
+        <div className="flex justify-between items-start min-w-0">
+          <div className="flex-1 min-w-0 pr-4">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white truncate max-w-full" title={cardTitle}>
               {cardTitle}
             </h3>
             {lead.company && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
-                <BuildingOfficeIcon className="w-4 h-4" />
-                {lead.company}
+              <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1 min-w-0">
+                <BuildingOfficeIcon className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{lead.company}</span>
               </p>
             )}
           </div>
-          <StatusBadge status={lead.status} />
+          <div className="flex-shrink-0">
+            <StatusBadge status={lead.status} />
+          </div>
         </div>
 
         {/* Contact Info & Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2">
             <EnvelopeIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-            <span className="truncate text-slate-600 dark:text-slate-300" title={lead.email}>{lead.email}</span>
-            <button onClick={() => handleCopy(lead.email, 'email')} title="Copy Email" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
-                {copiedItem === 'email' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
-            </button>
-            <a href={`mailto:${lead.email}`} onClick={() => setContactModalOpen(true)} title="Send Email" className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
-                <EnvelopeIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
-            </a>
+            <span className="truncate text-slate-600 dark:text-slate-300" title={getDisplayEmail(lead.email)}>{getDisplayEmail(lead.email)}</span>
+            {isValidEmail(lead.email) && (
+              <>
+                <button onClick={() => handleCopy(lead.email, 'email')} title="Copy Email" className="ml-auto p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
+                    {copiedItem === 'email' ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4 text-slate-500"/>}
+                </button>
+                <a href={`mailto:${lead.email}`} onClick={() => setContactModalOpen(true)} title="Send Email" className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <EnvelopeIcon className="w-4 h-4 text-teal-600 dark:text-teal-400"/>
+                </a>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
@@ -245,7 +280,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
 
         {/* Footer Actions */}
         <div className="mt-2 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs text-slate-500 dark:text-slate-500">
-          <span>Created: {new Date(lead.createdAt).toLocaleString()}</span>
+          <span>
+            {lead.callDetails?.callStartTime 
+              ? `Call: ${new Date(lead.callDetails.callStartTime).toLocaleString()}`
+              : `Created: ${new Date(lead.createdAt).toLocaleString()}`
+            }
+          </span>
            <div className="flex items-center gap-1">
                 <button onClick={() => onOpenAddNoteModal(lead)} title="Add Note" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     <ChatBubbleLeftIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
@@ -253,8 +293,17 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                 <button onClick={() => onOpenEditModal(lead)} title="Edit Lead" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     <PencilIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
                 </button>
-                <button onClick={() => setEmailModalOpen(true)} title="Send Email" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                    <EnvelopeIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                <button 
+                    onClick={handleEmailClick} 
+                    title="Email Lead Info to User" 
+                    disabled={isSendingEmail}
+                    className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isSendingEmail ? (
+                        <ArrowPathIcon className="w-5 h-5 text-slate-600 dark:text-slate-300 animate-spin" />
+                    ) : (
+                        <EnvelopeIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                    )}
                 </button>
                  <button onClick={handleDownload} title="Download Lead Data" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     <ArrowDownTrayIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
