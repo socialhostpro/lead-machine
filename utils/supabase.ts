@@ -153,7 +153,15 @@ export type Database = {
 }
 
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase.auth.token',
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
 
 // Helper to convert Supabase snake_case to our app's camelCase
 export const fromSupabase = (lead: Database['public']['Tables']['leads']['Row']): Lead => {

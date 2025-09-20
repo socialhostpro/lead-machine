@@ -140,11 +140,14 @@ const App: React.FC = () => {
     // Initialize session immediately on app start
     const initializeAuth = async () => {
       try {
+        // Wait for session to be restored from local storage
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Auth initialization error:', error);
           // Don't immediately fail, session might recover
         }
+        
+        console.log('Session initialized:', session ? 'session found' : 'no session');
         setSession(session);
         setLoading(false);
       } catch (error) {
@@ -155,17 +158,26 @@ const App: React.FC = () => {
     };
 
     // Handle Auth changes with better error handling
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.debug('Auth state change:', event, session ? 'session exists' : 'no session');
+      
+      // Always update session state
       setSession(session);
       setLoading(false);
       
-      // If user manually signed out, clear all state
-      if (event === 'SIGNED_OUT') {
+      // Handle different auth events
+      if (event === 'SIGNED_IN') {
+        console.log('User signed in successfully');
+      } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out, clearing app state');
         setCurrentUser(null);
         setCompanies([]);
         setCurrentCompanyId(null);
         setLeads([]);
+        // Clear any cached data
+        localStorage.removeItem('leads-cache');
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('Auth token refreshed');
       }
     });
     
@@ -1586,7 +1598,14 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-slate-50 dark:bg-slate-900" />;
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading session...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!session || !currentUser || !currentCompany) {

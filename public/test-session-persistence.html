@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Persistence Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Session Persistence Test</h1>
+    <div id="status">Checking session...</div>
+    <button id="login" style="display: none;">Test Login</button>
+    <button id="logout" style="display: none;">Test Logout</button>
+    <button id="refresh" onclick="location.reload()">Refresh Page</button>
+    
+    <script>
+        const { createClient } = supabase;
+        
+        // Use the same configuration as the app
+        const supabaseClient = createClient(
+            'https://xxjpzdmatqcgjxsdokou.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4anB6ZG1hdHFjZ2p4c2Rva291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NDA4MjQsImV4cCI6MjA3MzUxNjgyNH0.mFRzWP5O18B6xw65sWEbJWOufAiMZ2-ypBrMxQ4okbw',
+            {
+                auth: {
+                    storage: window.localStorage,
+                    storageKey: 'supabase.auth.token',
+                    autoRefreshToken: true,
+                    persistSession: true,
+                    detectSessionInUrl: true
+                }
+            }
+        );
+        
+        const statusDiv = document.getElementById('status');
+        const loginBtn = document.getElementById('login');
+        const logoutBtn = document.getElementById('logout');
+        
+        async function checkSession() {
+            try {
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                if (error) {
+                    statusDiv.innerHTML = `Error: ${error.message}`;
+                    return;
+                }
+                
+                if (session) {
+                    statusDiv.innerHTML = `
+                        <div style="color: green;">
+                            ✅ Session found!<br>
+                            User: ${session.user.email}<br>
+                            Expires: ${new Date(session.expires_at * 1000).toLocaleString()}<br>
+                            Token stored in localStorage: ${localStorage.getItem('supabase.auth.token') ? 'Yes' : 'No'}
+                        </div>
+                    `;
+                    loginBtn.style.display = 'none';
+                    logoutBtn.style.display = 'inline-block';
+                } else {
+                    statusDiv.innerHTML = `
+                        <div style="color: red;">
+                            ❌ No session found<br>
+                            Token in localStorage: ${localStorage.getItem('supabase.auth.token') ? 'Yes' : 'No'}
+                        </div>
+                    `;
+                    loginBtn.style.display = 'inline-block';
+                    logoutBtn.style.display = 'none';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `Exception: ${error.message}`;
+            }
+        }
+        
+        loginBtn.onclick = async () => {
+            const email = prompt('Email:');
+            const password = prompt('Password:');
+            if (email && password) {
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) {
+                    alert(`Login failed: ${error.message}`);
+                } else {
+                    checkSession();
+                }
+            }
+        };
+        
+        logoutBtn.onclick = async () => {
+            const { error } = await supabaseClient.auth.signOut();
+            if (error) {
+                alert(`Logout failed: ${error.message}`);
+            } else {
+                checkSession();
+            }
+        };
+        
+        // Listen for auth changes
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            console.log('Auth state change:', event, session ? 'session exists' : 'no session');
+            if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+                checkSession();
+            }
+        });
+        
+        // Check session on load
+        checkSession();
+    </script>
+</body>
+</html>
