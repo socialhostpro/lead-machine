@@ -321,6 +321,22 @@ export class AITrainingDataPipeline {
   }
 
   /**
+   * Get all active jobs
+   */
+  getActiveJobs(): PipelineJob[] {
+    return Array.from(this.currentJobs.values()).filter(job => 
+      job.status === 'running' || job.status === 'pending'
+    );
+  }
+
+  /**
+   * Get all jobs (active and completed)
+   */
+  getAllJobs(): PipelineJob[] {
+    return Array.from(this.currentJobs.values());
+  }
+
+  /**
    * Cancel a running job
    */
   async cancelJob(jobId: string): Promise<boolean> {
