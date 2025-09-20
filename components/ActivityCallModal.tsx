@@ -20,7 +20,8 @@ import {
 import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
 import ElevenLabsAudioPlayer from './ElevenLabsAudioPlayer';
-import { getLocationFromAreaCode } from '../utils/areaCodeMapping';
+// Location utilities disabled
+// import { getLocationFromAreaCode } from '../utils/areaCodeMapping';
 import { extractAreaCode } from '../utils/phoneUtils';
 
 interface ActivityCallModalProps {
@@ -66,13 +67,13 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   const [callTimer, setCallTimer] = useState<NodeJS.Timeout | null>(null);
   const [autoStopTimer, setAutoStopTimer] = useState<NodeJS.Timeout | null>(null);
 
-  // Get location from phone number
-  const getPhoneLocation = (phone: string | undefined) => {
-    if (!phone) return null;
-    return getLocationFromAreaCode(phone);
-  };
+  // Get location from phone number - DISABLED
+  // const getPhoneLocation = (phone: string | undefined) => {
+  //   if (!phone) return null;
+  //   return getLocationFromAreaCode(phone);
+  // };
 
-  const phoneLocation = getPhoneLocation(lead?.phone);
+  // const phoneLocation = getPhoneLocation(lead?.phone);
 
   // Define handleEndCall first so it can be used in useEffect
   const handleEndCall = useCallback(async () => {
@@ -356,11 +357,7 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                         <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-slate-800 dark:text-white">{lead.phone}</div>
-                          {phoneLocation && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                              📍 {phoneLocation.city}, {phoneLocation.state}
-                            </div>
-                          )}
+                          {/* Location display disabled */}
                         </div>
                         <button
                           onClick={() => handleCopy(lead.phone, 'phone')}
