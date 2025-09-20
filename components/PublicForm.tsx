@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { WebForm } from '../types';
 import { supabase } from '../utils/supabase';
+import { googleAdsService } from '../utils/googleAdsService';
 import { ArrowPathIcon } from './icons';
 
 interface PublicFormProps {
@@ -17,6 +18,15 @@ const PublicForm: React.FC<PublicFormProps> = ({ formId }) => {
   const [formData, setFormData] = useState<FormData>({});
 
   useEffect(() => {
+    // Initialize Google AdWords tracking for public form
+    try {
+      googleAdsService.initializeTracking();
+      googleAdsService.storeUTMParameters(); // Store attribution data
+      googleAdsService.trackPageView(`/form/${formId}`, 'Public Lead Form');
+    } catch (error) {
+      console.debug('Google AdWords initialization error (non-critical):', error);
+    }
+
     const fetchFormConfig = async () => {
       if (!formId) {
         setFormState('error');
@@ -73,6 +83,21 @@ const PublicForm: React.FC<PublicFormProps> = ({ formId }) => {
         setFormState('error');
     } else {
         setFormState('submitted');
+        
+        // GOOGLE ADWORDS CONVERSION TRACKING for web form submission
+        try {
+          googleAdsService.trackConversion('form_submission', 75); // $75 estimated value for web leads
+          googleAdsService.trackEvent('form_submitted', {
+            form_id: formId,
+            form_name: formConfig.name,
+            lead_source: 'web_form',
+            lead_email: leadData.email || '',
+            lead_name: `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim(),
+            event_category: 'lead_generation'
+          });
+        } catch (error) {
+          console.debug('Google AdWords tracking error (non-critical):', error);
+        }
     }
   };
 

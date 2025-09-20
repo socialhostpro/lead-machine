@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, LeadSource, Note, User, Company } from '../types';
-import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon, PrinterIcon, ChevronDownIcon, MapIcon } from './icons';
+import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon, PrinterIcon, ChevronDownIcon, MapIcon, MapPinIcon } from './icons';
 import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
 import ConfirmationModal from './ConfirmationModal';
@@ -9,6 +9,7 @@ import EmailModal from './EmailModal';
 import { getTimeBasedStatus, getTimeBasedColorClass, formatTimeDifference } from '../utils/callerTracking';
 import { getLocationFromAreaCode } from '../utils/areaCodeMapping';
 import { extractAreaCode } from '../utils/phoneUtils';
+import { formatDistance } from '../utils/geolocation';
 
 interface LeadCardProps {
   lead: Lead;
@@ -428,6 +429,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
               <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1 min-w-0">
                 <BuildingOfficeIcon className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate">{lead.company}</span>
+              </p>
+            )}
+            {lead.distance_from_user !== undefined && (
+              <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1 min-w-0">
+                <MapPinIcon className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{formatDistance(lead.distance_from_user)} away</span>
               </p>
             )}
           </div>

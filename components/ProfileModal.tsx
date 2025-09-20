@@ -119,7 +119,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                         id="userName"
                         value={userName}
                         onChange={(e) => setUserName(e.target.value)}
-                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                         required
                     />
                 </div>
@@ -155,7 +155,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                                     id="notificationFrequency"
                                     value={notificationFrequency}
                                     onChange={(e) => setNotificationFrequency(e.target.value as any)}
-                                    className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                 >
                                     <option value="immediate">Immediate</option>
                                     <option value="hourly">Hourly Digest</option>
@@ -320,7 +320,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                         name="name"
                         value={companyData.name}
                         onChange={handleCompanyChange}
-                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                         required
                     />
                 </div>

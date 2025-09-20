@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Company, User, UserRole } from '../types';
-import { XMarkIcon, UserIcon, ArrowCounterClockwiseIcon, LightBulbIcon, CheckIcon } from './icons';
+import { XMarkIcon, UserIcon, ArrowCounterClockwiseIcon, LightBulbIcon, CheckIcon, ArrowPathIcon } from './icons';
 import ConfirmationModal from './ConfirmationModal';
 import { showTestNotification } from '../utils/notifications';
 import { sendAdminTestEmail } from '../utils/emailNotifications';
 import { getConfig } from '../utils/config';
+import { googleAdsOAuthService } from '../utils/googleAdsOAuth';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -35,6 +36,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [emailTestResult, setEmailTestResult] = useState<'idle' | 'success' | 'error'>('idle');
+  
+  // Google AdWords state
+  const [googleAdsConversionId, setGoogleAdsConversionId] = useState(company.google_ads_conversion_id || '');
+  const [googleAdsConversionLabel, setGoogleAdsConversionLabel] = useState(company.google_ads_conversion_label || '');
+  const [googleAnalyticsId, setGoogleAnalyticsId] = useState(company.google_analytics_id || '');
+  const [isGoogleAdsConnected, setIsGoogleAdsConnected] = useState(company.google_ads_connected || false);
+  const [isConnectingGoogleAds, setIsConnectingGoogleAds] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -45,6 +53,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
         setEmailReplyToAddress(company.emailReplyToAddress || 'noreply@imaginecapital.ai');
         setEmailFromName(company.emailFromName || 'Lead Machine Notifications');
         setSendgridDnsVerified(company.sendgridDnsVerified || false);
+        setGoogleAdsConversionId(company.google_ads_conversion_id || '');
+        setGoogleAdsConversionLabel(company.google_ads_conversion_label || '');
+        setGoogleAnalyticsId(company.google_analytics_id || '');
+        setIsGoogleAdsConnected(company.google_ads_connected || false);
         setSaveState('idle');
         setErrorMessage(null);
     }
@@ -64,7 +76,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
       emailFromAddress,
       emailReplyToAddress,
       emailFromName,
-      sendgridDnsVerified
+      sendgridDnsVerified,
+      google_ads_conversion_id: googleAdsConversionId,
+      google_ads_conversion_label: googleAdsConversionLabel,
+      google_analytics_id: googleAnalyticsId,
+      google_ads_connected: isGoogleAdsConnected
     });
     
     if (result.success) {
@@ -119,6 +135,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
     } finally {
       setIsTestingEmail(false);
     }
+  };
+
+  // Google AdWords OAuth handlers
+  const handleConnectGoogleAds = async () => {
+    if (!googleAdsOAuthService.isConfigured()) {
+      setErrorMessage('Google OAuth is not configured. Please contact support.');
+      return;
+    }
+
+    setIsConnectingGoogleAds(true);
+    try {
+      const authUrl = googleAdsOAuthService.getAuthorizationUrl(company.id);
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('Google Ads connection failed:', error);
+      setErrorMessage('Failed to connect to Google Ads. Please try again.');
+      setIsConnectingGoogleAds(false);
+    }
+  };
+
+  const handleDisconnectGoogleAds = async () => {
+    setIsGoogleAdsConnected(false);
+    setGoogleAdsConversionId('');
+    setGoogleAdsConversionLabel('');
+    setGoogleAnalyticsId('');
+    // Note: Token revocation would happen server-side
   };
 
   if (!isOpen) return null;
@@ -208,7 +250,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                   id="agentId"
                                   value={defaultAgentId}
                                   onChange={e => setDefaultAgentId(e.target.value)}
-                                  className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                   placeholder="e.g., F8y2pogcIfbxE7O2u4H8"
                                   required
                               />
@@ -225,7 +267,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                         id="emailFromAddress"
                                         value={emailFromAddress}
                                         onChange={e => setEmailFromAddress(e.target.value)}
-                                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                         placeholder="noreply@imaginecapital.ai"
                                         required
                                     />
@@ -244,7 +286,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                         id="emailReplyToAddress"
                                         value={emailReplyToAddress}
                                         onChange={e => setEmailReplyToAddress(e.target.value)}
-                                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                         placeholder="noreply@imaginecapital.ai"
                                         required
                                     />
@@ -258,7 +300,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                         id="emailFromName"
                                         value={emailFromName}
                                         onChange={e => setEmailFromName(e.target.value)}
-                                        className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                         placeholder="Lead Machine Notifications"
                                         required
                                     />
@@ -290,7 +332,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                   id="webhookUrl"
                                   value={webhookUrl}
                                   onChange={e => setWebhookUrl(e.target.value)}
-                                  className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                   placeholder="https://api.example.com/new-lead"
                               />
                               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Send a POST request with lead data when a new lead is created.</p>
@@ -302,10 +344,96 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, company,
                                   id="webhookHeader"
                                   value={webhookHeader}
                                   onChange={e => setWebhookHeader(e.target.value)}
-                                  className="mt-1 block w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
                                   placeholder="Bearer YOUR_SECRET_KEY"
                               />
                           </div>
+                           
+                           {/* Google AdWords Configuration */}
+                           <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                              <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">Google AdWords & Analytics</h3>
+                              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                  Configure Google AdWords conversion tracking and Google Analytics for your leads.
+                              </p>
+                              
+                              {isGoogleAdsConnected ? (
+                                  <div className="mt-4 space-y-4">
+                                      <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                          <div className="flex items-center gap-2">
+                                              <CheckIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                              <span className="text-sm font-medium text-green-700 dark:text-green-300">Google Ads Connected</span>
+                                          </div>
+                                          <button
+                                              type="button"
+                                              onClick={handleDisconnectGoogleAds}
+                                              className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                          >
+                                              Disconnect
+                                          </button>
+                                      </div>
+                                      
+                                      <div>
+                                          <label htmlFor="googleAdsConversionId" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Google Ads Conversion ID</label>
+                                          <input
+                                              type="text"
+                                              id="googleAdsConversionId"
+                                              value={googleAdsConversionId}
+                                              onChange={e => setGoogleAdsConversionId(e.target.value)}
+                                              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                              placeholder="123456789"
+                                          />
+                                      </div>
+                                      
+                                      <div>
+                                          <label htmlFor="googleAdsConversionLabel" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Google Ads Conversion Label</label>
+                                          <input
+                                              type="text"
+                                              id="googleAdsConversionLabel"
+                                              value={googleAdsConversionLabel}
+                                              onChange={e => setGoogleAdsConversionLabel(e.target.value)}
+                                              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                              placeholder="AbC_dEfGhIjKlMnOpQrS"
+                                          />
+                                      </div>
+                                      
+                                      <div>
+                                          <label htmlFor="googleAnalyticsId" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Google Analytics (GA4) ID</label>
+                                          <input
+                                              type="text"
+                                              id="googleAnalyticsId"
+                                              value={googleAnalyticsId}
+                                              onChange={e => setGoogleAnalyticsId(e.target.value)}
+                                              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500"
+                                              placeholder="G-XXXXXXXXXX"
+                                          />
+                                      </div>
+                                  </div>
+                              ) : (
+                                  <div className="mt-4">
+                                      <button
+                                          type="button"
+                                          onClick={handleConnectGoogleAds}
+                                          disabled={isConnectingGoogleAds}
+                                          className="flex items-center gap-2 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                          {isConnectingGoogleAds ? (
+                                              <>
+                                                  <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                                                  Connecting...
+                                              </>
+                                          ) : (
+                                              <>
+                                                  Connect Google Ads
+                                              </>
+                                          )}
+                                      </button>
+                                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                          Connect your Google Ads account to enable conversion tracking and analytics.
+                                      </p>
+                                  </div>
+                              )}
+                           </div>
+                           
                            <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
                               <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300">Utilities</h3>
                               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">

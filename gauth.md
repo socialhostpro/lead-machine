@@ -1,0 +1,2 @@
+REACT_APP_GOOGLE_OAUTH_CLIENT_ID=546954721368-h9mkh2cmi2jjc82q134f4ugocl86ol90.apps.googleusercontent.com
+REACT_APP_GOOGLE_OAUTH_REDIRECT_URI=https://leads.imaginecapital.ai/auth/callback

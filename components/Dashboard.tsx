@@ -4,9 +4,11 @@ import ActivityFeed from './ActivityFeed';
 import LeadCard from './LeadCard';
 import ReturningCallerStack from './ReturningCallerStack';
 import ReportsModal from './ReportsModal';
-import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon, ChartBarIcon } from './icons';
+import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon, ChartBarIcon, MapPinIcon } from './icons';
 import Pagination from './Pagination';
 import { groupReturningCallers, calculateCallerTracking } from '../utils/callerTracking';
+import { useDistanceSorting } from '../hooks/useDistanceSorting';
+import { formatDistance } from '../utils/geolocation';
 
 interface DashboardProps {
   leads: Lead[];
@@ -47,6 +49,8 @@ const TABS: (LeadStatus | 'All')[] = ['All', LeadStatus.NEW, LeadStatus.CONTACTE
 
 const SORT_OPTIONS = {
   'callDate_desc': 'Latest Caller First',
+  'distance_asc': 'Distance (Nearest First)',
+  'distance_desc': 'Distance (Farthest First)',
   'timeBasedStatus_asc': 'Hours Since Contact (Least)',
   'timeBasedStatus_desc': 'Hours Since Contact (Most)',
   'createdAt_desc': 'Newest First',
@@ -92,6 +96,17 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SECONDS);
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
   const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
+
+  // Distance sorting hook
+  const { 
+    userLocation, 
+    locationError, 
+    isGeocodingLeads, 
+    sortedLeads, 
+    requestLocation, 
+    sortByDistance, 
+    isLocationEnabled 
+  } = useDistanceSorting(leads);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -157,7 +172,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   }), [filteredLeadsByTime]);
 
   const filteredAndSortedLeads = useMemo(() => {
-    let filteredLeads = [...filteredLeadsByTime];
+    // Use distance-sorted leads if distance sorting is selected and location is available
+    const baseLeads = (sortOption.startsWith('distance_') && isLocationEnabled) ? sortedLeads : filteredLeadsByTime;
+    let filteredLeads = [...baseLeads];
 
     if (activeTab !== 'All') {
       filteredLeads = filteredLeads.filter(lead => lead.status === activeTab);
@@ -179,6 +196,24 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     filteredLeads.sort((a, b) => {
         switch (sortOption) {
+            case 'distance_asc':
+                // Sort by distance (nearest first) - only works if location is enabled
+                if (isLocationEnabled) {
+                    const aDistance = a.distance_from_user ?? 999999;
+                    const bDistance = b.distance_from_user ?? 999999;
+                    return aDistance - bDistance;
+                }
+                // Fallback to created date if no location
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            case 'distance_desc':
+                // Sort by distance (farthest first)
+                if (isLocationEnabled) {
+                    const aDistance = a.distance_from_user ?? -1;
+                    const bDistance = b.distance_from_user ?? -1;
+                    return bDistance - aDistance;
+                }
+                // Fallback to created date if no location
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
             case 'callDate_desc':
                 // Sort by call date (callStartTime), fallback to createdAt
                 const aCallTime = a.callDetails?.callStartTime ? new Date(a.callDetails.callStartTime).getTime() : new Date(a.createdAt).getTime();
@@ -239,7 +274,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
 
     return filteredLeads;
-  }, [filteredLeadsByTime, activeTab, searchQuery, sortOption, showOnlyWithPhone]);
+  }, [filteredLeadsByTime, activeTab, searchQuery, sortOption, showOnlyWithPhone, sortedLeads, isLocationEnabled]);
 
   // Group returning callers and prepare display data
   const groupedLeads = useMemo(() => {
@@ -501,6 +536,31 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <ArrowDownTrayIcon className="w-4 h-4" />
                                 <span>Download CSV</span>
                             </button>
+                            
+                            {/* Location controls for distance sorting */}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={requestLocation}
+                                    disabled={isGeocodingLeads}
+                                    className={`flex items-center gap-2 border rounded-lg py-2 px-3 text-sm transition-colors ${
+                                        isLocationEnabled
+                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                                            : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    title={userLocation ? `Location enabled: ${userLocation.latitude.toFixed(3)}, ${userLocation.longitude.toFixed(3)}` : 'Enable location for distance sorting'}
+                                >
+                                    <MapPinIcon className="w-4 h-4" />
+                                    <span className="hidden sm:inline">
+                                        {isGeocodingLeads ? 'Geocoding...' : isLocationEnabled ? 'Location ON' : 'Enable Location'}
+                                    </span>
+                                </button>
+                                
+                                {locationError && (
+                                    <div className="text-xs text-red-600 dark:text-red-400 max-w-40 truncate" title={locationError}>
+                                        {locationError}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 

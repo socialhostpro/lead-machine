@@ -170,12 +170,12 @@ const FormsManagementModal: React.FC<FormsManagementModalProps> = ({
                             </div>
                             <div>
                                 <label htmlFor="title" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Public Title</label>
-                                <input id="title" type="text" value={currentForm.title} onChange={e => updateFormValue('title', e.target.value)} required className="mt-1 w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
+                                <input id="title" type="text" value={currentForm.title} onChange={e => updateFormValue('title', e.target.value)} required className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
                             </div>
                         </div>
                          <div className="mt-4">
                             <label htmlFor="description" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Public Description</label>
-                            <textarea id="description" value={currentForm.description} onChange={e => updateFormValue('description', e.target.value)} rows={2} className="mt-1 w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
+                            <textarea id="description" value={currentForm.description} onChange={e => updateFormValue('description', e.target.value)} rows={2} className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
                         </div>
                     </div>
 
@@ -204,12 +204,12 @@ const FormsManagementModal: React.FC<FormsManagementModalProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                              <div>
                                 <label htmlFor="submitButtonText" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Submit Button Text</label>
-                                <input id="submitButtonText" type="text" value={currentForm.config.submitButtonText} onChange={e => updateFormValue('config.submitButtonText', e.target.value)} required className="mt-1 w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
+                                <input id="submitButtonText" type="text" value={currentForm.config.submitButtonText} onChange={e => updateFormValue('config.submitButtonText', e.target.value)} required className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
                             </div>
                         </div>
                         <div className="mt-4">
                             <label htmlFor="successMessage" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Success Message</label>
-                            <textarea id="successMessage" value={currentForm.config.successMessage} onChange={e => updateFormValue('config.successMessage', e.target.value)} rows={3} required className="mt-1 w-full bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
+                            <textarea id="successMessage" value={currentForm.config.successMessage} onChange={e => updateFormValue('config.successMessage', e.target.value)} rows={3} required className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md text-slate-800 dark:text-white" />
                         </div>
                     </div>
                     <div className="flex justify-end gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">

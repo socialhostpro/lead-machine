@@ -21,6 +21,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { EmailNotificationManager, sendNewMessageNotification, getEmailNotificationConfig } from './utils/emailNotifications';
 import ActivityCallModal from './components/ActivityCallModal';
 import DetailedInsightsModal from './components/DetailedInsightsModal';
+import { googleAdsService, createCompanyGoogleAdsService, GoogleAdsService } from './utils/googleAdsService';
 
 
 // Helper to get a user-friendly error message from a Supabase error object.
@@ -139,19 +140,30 @@ const App: React.FC = () => {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Auth initialization error:', error);
+          // Don't immediately fail, session might recover
         }
         setSession(session);
         setLoading(false);
       } catch (error) {
         console.error('Failed to initialize auth:', error);
         setLoading(false);
+        // Don't throw error to prevent app crash
       }
     };
 
-    // Handle Auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Handle Auth changes with better error handling
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.debug('Auth state change:', event, session ? 'session exists' : 'no session');
       setSession(session);
       setLoading(false);
+      
+      // If user manually signed out, clear all state
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setCompanies([]);
+        setCurrentCompanyId(null);
+        setLeads([]);
+      }
     });
     
     // Initialize auth immediately
@@ -216,8 +228,16 @@ const App: React.FC = () => {
       const { data: userProfile, error: userError } = await fetchUserProfileWithRetries(session.user.id);
       
       if (userError || !userProfile) {
-        console.error("Could not fetch user profile. Signing out.", userError ? getSupabaseErrorMessage(userError) : 'User profile is null.');
-        await supabase.auth.signOut();
+        console.error("Could not fetch user profile. Retrying in background...", userError ? getSupabaseErrorMessage(userError) : 'User profile is null.');
+        // Don't sign out immediately - this might be a temporary network issue
+        // Instead, retry after a short delay and only sign out if it's a persistent auth issue
+        if (userError && (userError as any).code === 'PGRST301') {
+          // This is a permission/auth error, safe to sign out
+          await supabase.auth.signOut();
+        } else {
+          // Temporary error, keep user logged in and retry later
+          console.log("Temporary error fetching user profile, keeping user logged in");
+        }
         return;
       }
       
@@ -257,9 +277,41 @@ const App: React.FC = () => {
   
   const currentCompany = useMemo(() => companies.find(c => c.id === currentCompanyId), [companies, currentCompanyId]);
   
+  // Company-specific Google AdWords service
+  const [companyGoogleAdsService, setCompanyGoogleAdsService] = useState<GoogleAdsService | null>(null);
+  
+  // Update Google AdWords service when company changes
+  useEffect(() => {
+    if (currentCompany) {
+      const service = createCompanyGoogleAdsService(currentCompany);
+      setCompanyGoogleAdsService(service);
+    } else {
+      setCompanyGoogleAdsService(null);
+    }
+  }, [currentCompany]);
+  
+  // Initialize Google AdWords tracking when company service changes
+  useEffect(() => {
+    if (companyGoogleAdsService) {
+      try {
+        companyGoogleAdsService.initializeTracking();
+        companyGoogleAdsService.storeUTMParameters(); // Store attribution data
+        companyGoogleAdsService.trackPageView('/app', 'Lead Machine Dashboard');
+      } catch (error) {
+        console.debug('Google AdWords initialization error (non-critical):', error);
+      }
+    }
+  }, [companyGoogleAdsService]);
+  
   // Background ElevenLabs sync - runs independently of main fetch
   const syncElevenLabsInBackground = useCallback(async () => {
     if (!session || !currentCompany) return;
+    
+    // Check if session is still valid
+    if (!session.access_token || session.expires_at && session.expires_at < Date.now() / 1000) {
+      console.debug('Session expired, skipping background sync');
+      return;
+    }
     
     try {
       console.log('🔄 Background ElevenLabs sync started...');
@@ -398,6 +450,24 @@ const App: React.FC = () => {
             // Update UI with new leads if currently viewing leads
             const newFrontendLeads = insertedLeads.map(fromSupabase);
             setLeads(prev => [...newFrontendLeads, ...prev]);
+            
+            // GOOGLE ADWORDS CONVERSION TRACKING for ElevenLabs leads
+            newFrontendLeads.forEach(lead => {
+              try {
+                if (companyGoogleAdsService) {
+                  companyGoogleAdsService.trackConversion('elevenlabs_lead_creation', 100); // $100 estimated value for phone leads
+                  companyGoogleAdsService.trackEvent('phone_lead_created', {
+                    lead_id: lead.id,
+                    lead_source: 'elevenlabs',
+                    lead_status: lead.status,
+                    phone_number: lead.phone || 'unknown',
+                    event_category: 'lead_generation'
+                  });
+                }
+              } catch (error) {
+                console.debug('Google AdWords tracking error (non-critical):', error);
+              }
+            });
             
             // Play sound notification
             if (currentUser) {
@@ -994,6 +1064,22 @@ Please log in to the Lead Machine to review and respond to this lead.`;
       const savedLead = fromSupabase(data);
       setLeads(prev => [savedLead, ...prev]);
       showNewLeadNotification(savedLead);
+      
+      // GOOGLE ADWORDS CONVERSION TRACKING for manually added lead
+      try {
+        if (companyGoogleAdsService) {
+          companyGoogleAdsService.trackConversion('manual_lead_creation', 50); // $50 estimated value
+          companyGoogleAdsService.trackEvent('lead_created', {
+            lead_id: savedLead.id,
+            lead_source: 'manual',
+            lead_email: savedLead.email,
+            lead_name: `${savedLead.firstName} ${savedLead.lastName}`,
+            event_category: 'lead_generation'
+          });
+        }
+      } catch (error) {
+        console.debug('Google AdWords tracking error (non-critical):', error);
+      }
       
       // PLAY SOUND NOTIFICATION for manually added lead
       if (currentUser) {

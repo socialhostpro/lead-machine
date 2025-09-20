@@ -78,6 +78,17 @@ export interface Company {
   email_from_name?: string;           // FIXED: snake_case to match database
   sendgrid_dns_verified?: boolean;    // FIXED: snake_case to match database
   last_sync_timestamp?: string;       // FIXED: snake_case to match database
+  // Google AdWords configuration (per-company)
+  google_ads_conversion_id?: string;
+  google_ads_conversion_label?: string;
+  google_analytics_id?: string;
+  google_ads_access_token?: string;
+  google_ads_refresh_token?: string;
+  google_ads_connected?: boolean;
+  google_ads_account_id?: string;
+  // Business location for distance calculations
+  business_latitude?: number;
+  business_longitude?: number;
   last_conversation_id?: string;      // FIXED: snake_case to match database
 }
 
@@ -125,6 +136,11 @@ export interface Lead {
   caller_longitude?: number;
   caller_address?: string;
   distance_from_business?: number; // in miles
+  // Enhanced location data
+  geocoded_latitude?: number;
+  geocoded_longitude?: number;
+  parsed_address?: string;
+  distance_from_user?: number; // distance from current user location
 }
 
 export enum UserRole {
