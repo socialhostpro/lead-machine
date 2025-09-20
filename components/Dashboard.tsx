@@ -22,7 +22,7 @@ interface DashboardProps {
   onOpenSettings: () => void;
   onOpenProfile: () => void;
   onToggleTheme: () => void;
-  onRefreshLeads: () => Promise<void>;
+  onRefreshLeads: (forceRefresh?: boolean) => Promise<void>;
   onOpenUserManagement: () => void;
   onLogout: () => void;
   onUpdateLead: (updatedLead: Lead) => void;
@@ -665,6 +665,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           onClose={() => setIsReportsModalOpen(false)}
           leads={leads}
           timePeriod={timePeriod}
+          onRefreshData={() => onRefreshLeads(true)}
         />
       </div>
     </div>

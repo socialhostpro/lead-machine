@@ -11,18 +11,33 @@ interface ReportsModalProps {
   onClose: () => void;
   leads: Lead[];
   timePeriod: 'today' | 'week' | 'month' | 'year' | 'all';
+  onRefreshData?: () => Promise<void>;
 }
 
-const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, timePeriod }) => {
+const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, timePeriod, onRefreshData }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'sources' | 'trends' | 'recommendations' | 'geographic'>('overview');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const analytics = useMemo(() => {
     return LeadAnalyticsEngine.generateComprehensiveReport(leads, timePeriod);
   }, [leads, timePeriod, refreshKey]);
 
-  const handleRefreshReport = () => {
-    setRefreshKey(prev => prev + 1);
+  const handleRefreshReport = async () => {
+    if (onRefreshData) {
+      setIsRefreshing(true);
+      try {
+        await onRefreshData(); // Fetch fresh data from server
+        setRefreshKey(prev => prev + 1); // Force analytics recalculation
+      } catch (error) {
+        console.error('Error refreshing report data:', error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    } else {
+      // Fallback to local refresh if no refresh function provided
+      setRefreshKey(prev => prev + 1);
+    }
   };
 
   const handleExportReport = () => {
@@ -195,11 +210,16 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, leads, tim
           <div className="flex items-center gap-2">
             <button
               onClick={handleRefreshReport}
-              className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              disabled={isRefreshing}
+              className={`flex items-center gap-2 px-3 py-2 text-white rounded-lg transition-colors ${
+                isRefreshing 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-green-500 hover:bg-green-600'
+              }`}
               title="Refresh Report"
             >
-              <ArrowPathIcon className="w-4 h-4" />
-              Refresh
+              <ArrowPathIcon className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </button>
             <button
               onClick={handleExportPDF}
