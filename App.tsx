@@ -74,24 +74,8 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
-  // Persistent leads state with localStorage
-  const [leads, setLeads] = useState<Lead[]>(() => {
-    try {
-      const savedLeads = localStorage.getItem('leads-cache');
-      return savedLeads ? JSON.parse(savedLeads) : [];
-    } catch {
-      return [];
-    }
-  });
-  
-  // Update localStorage when leads change
-  useEffect(() => {
-    try {
-      localStorage.setItem('leads-cache', JSON.stringify(leads));
-    } catch (error) {
-      console.warn('Failed to save leads to localStorage:', error);
-    }
-  }, [leads]);
+  // NO CACHE - ALWAYS FRESH DATA
+  const [leads, setLeads] = useState<Lead[]>([]);
   
   const leadsRef = useRef(leads);
   useEffect(() => {
@@ -163,18 +147,7 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // Make cache clearing available globally for debugging - FORCE CLEAR NOW
-  useEffect(() => {
-    // Clear old cache format to force refresh
-    const oldCacheKeys = Object.keys(localStorage).filter(key => key.includes('leads-'));
-    oldCacheKeys.forEach(key => localStorage.removeItem(key));
-    
-    (window as any).clearLeadsCache = () => {
-      const cacheKey = `leads-last-fetch-${currentCompany?.id}`;
-      localStorage.removeItem(cacheKey);
-      localStorage.removeItem('leads-cache');
-      console.log('🗑️ Leads cache cleared! Refresh to fetch new data.');
-    };
+    // NO CACHE - removed all cache logic
     (window as any).forceRefreshLeads = () => {
       if (currentCompany) {
         fetchLeads(true);
@@ -304,26 +277,12 @@ const App: React.FC = () => {
       return;
     }
 
-    // Check cache freshness (5 minutes)
-    const cacheKey = `leads-last-fetch-${currentCompany.id}`;
-    const lastFetchTime = localStorage.getItem(cacheKey);
-    const now = Date.now();
-    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-    
-    if (!forceRefresh && lastFetchTime && (now - parseInt(lastFetchTime)) < CACHE_DURATION) {
-      console.log('Using cached leads data (background sync handles ElevenLabs)');
-      setIsLeadsLoading(false);
-      // Force background sync to run immediately if not already running
-      setTimeout(() => syncElevenLabsInBackground(), 1000);
-      return;
-    }
-
+    // ALWAYS FETCH FRESH - NO CACHE
     setIsLeadsLoading(true);
     
-    // Show loading toast for manual refresh
-    let loadingToast: string | null = null;
     if (forceRefresh) {
-      loadingToast = toast.info('Refreshing leads...', { duration: 0 });
+      toast.info('Refreshing leads...', { duration: 0 });
+    }
     }
 
     try {
@@ -465,8 +424,7 @@ const App: React.FC = () => {
         setIsLeadsLoading(false);
     }
     
-    // Update cache timestamp
-    localStorage.setItem(cacheKey, now.toString());
+    // NO CACHE UPDATES
   }, [currentCompany, session]);
 
   // Manual refresh that includes ElevenLabs sync
