@@ -147,15 +147,26 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // NO CACHE - removed all cache logic
-    (window as any).forceRefreshLeads = () => {
-      if (currentCompany) {
-        fetchLeads(true);
-      }
-    };
-  }, [currentCompany, fetchLeads]);
-
-  // CRITICAL: Unregister any existing service workers to prevent CORS issues
+    // NUCLEAR CACHE CLEARING - KILL EVERYTHING
+    console.log('🧹 CLEARING ALL BROWSER CACHE...');
+    
+    // Clear localStorage
+    try {
+      localStorage.clear();
+      console.log('✅ localStorage cleared');
+    } catch (e) {
+      console.log('❌ localStorage clear failed:', e);
+    }
+    
+    // Clear sessionStorage  
+    try {
+      sessionStorage.clear();
+      console.log('✅ sessionStorage cleared');
+    } catch (e) {
+      console.log('❌ sessionStorage clear failed:', e);
+    }
+    
+    // Unregister ALL service workers
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         for(let registration of registrations) {
@@ -164,6 +175,30 @@ const App: React.FC = () => {
         }
       });
     }
+    
+    // Clear cache API if available
+    if ('caches' in window) {
+      caches.keys().then(function(cacheNames) {
+        return Promise.all(
+          cacheNames.map(function(cacheName) {
+            console.log('🗑️ Deleting cache:', cacheName);
+            return caches.delete(cacheName);
+          })
+        );
+      });
+    }
+    
+    console.log('🚀 ALL CACHE CLEARED - FRESH START!');
+  }, []);
+
+  useEffect(() => {
+    // NO CACHE - removed all cache logic
+    (window as any).forceRefreshLeads = () => {
+      if (currentCompany) {
+        fetchLeads(true);
+      }
+    };
+  }, [currentCompany, fetchLeads]);
     
     const fetchInitialData = async () => {
       if (!session) {
