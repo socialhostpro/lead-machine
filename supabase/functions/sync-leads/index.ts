@@ -156,8 +156,55 @@ serve(async (req) => {
       const collectedData = detailData?.analysis?.data_collection_results || {}
       const getVal = (key: string) => (collectedData[key] && collectedData[key].value) ? collectedData[key].value : null
 
-      const firstName = getVal('firstname') || 'Unknown'
-      const lastName = getVal('lastname') || `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+      let firstName = getVal('firstname') || 'Unknown'
+      let lastName = getVal('lastname') || `Call (${new Date(conv.start_time_unix_secs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+      
+      // If name extraction failed, try to parse from transcript_summary
+      if (firstName === 'Unknown' && conv.transcript_summary) {
+        // Enhanced name extraction patterns
+        const namePatterns = [
+          // Pattern 1: "First Last called" or "First Last, an existing client"
+          /^([A-Z][a-z]+)\s+([A-Z][a-z]+)(?:,\s+an?\s+existing\s+client)?,?\s+called/i,
+          // Pattern 2: "First Last provided" or "First Last stated"
+          /([A-Z][a-z]+)\s+([A-Z][a-z]+)\s+(?:provided|stated|mentioned|gave)/i,
+          // Pattern 3: "spoke with First Last" or "speaking with First Last"
+          /(?:spoke\s+with|speaking\s+with)\s+([A-Z][a-z]+)\s+([A-Z][a-z]+)/i,
+          // Pattern 4: "name is First Last" or "named First Last"
+          /(?:name\s+is|named)\s+([A-Z][a-z]+)\s+([A-Z][a-z]+)/i,
+          // Pattern 5: Direct name mention at start of sentence
+          /(?:^|\.\s+)([A-Z][a-z]+)\s+([A-Z][a-z]+)\s+(?:called|contacted|phoned)/i
+        ];
+        
+        for (const pattern of namePatterns) {
+          const match = conv.transcript_summary.match(pattern);
+          if (match) {
+            firstName = match[1];
+            lastName = match[2];
+            console.log(`Extracted name from transcript: ${firstName} ${lastName}`);
+            break;
+          }
+        }
+        
+        // If still no match, try simpler single name patterns
+        if (firstName === 'Unknown') {
+          const singleNamePatterns = [
+            /^([A-Z][a-z]+)\s+called/i,
+            /(?:caller|client)\s+([A-Z][a-z]+)/i,
+            /name\s+(?:is\s+)?([A-Z][a-z]+)/i
+          ];
+          
+          for (const pattern of singleNamePatterns) {
+            const match = conv.transcript_summary.match(pattern);
+            if (match) {
+              firstName = match[1];
+              lastName = 'Caller';
+              console.log(`Extracted single name from transcript: ${firstName}`);
+              break;
+            }
+          }
+        }
+      }
+      
       const email = getVal('email') || `${conv.conversation_id}@imported-lead.com`
       const phone = getVal('phone') || 'N/A'
       const issueDescription = getVal('description') || null
