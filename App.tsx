@@ -21,6 +21,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { EmailNotificationManager, sendNewMessageNotification, getEmailNotificationConfig } from './utils/emailNotifications';
 import ActivityCallModal from './components/ActivityCallModal';
 import DetailedInsightsModal from './components/DetailedInsightsModal';
+import { AITrainingDashboard } from './components/AITrainingDashboard';
 import { googleAdsService, createCompanyGoogleAdsService, GoogleAdsService } from './utils/googleAdsService';
 import { sendNewLeadsNotification, getAdminUsers, formatTimeframe } from './utils/leadEmailNotifications';
 
@@ -116,6 +117,7 @@ const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isProfileModalOpen, setProfileModalOpen] = useState(false);
   const [isUserManagementModalOpen, setUserManagementModalOpen] = useState(false);
+  const [isAITrainingModalOpen, setAITrainingModalOpen] = useState(false);
   const [isFormsModalOpen, setFormsModalOpen] = useState(false);
   const [isEmbedCodeModalOpen, setEmbedCodeModalOpen] = useState(false);
   const [isActivityCallModalOpen, setActivityCallModalOpen] = useState(false);
@@ -1608,6 +1610,7 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
         onToggleTheme={toggleTheme}
         onRefreshLeads={fetchLeads}
         onOpenUserManagement={() => setUserManagementModalOpen(true)}
+        onOpenAITraining={() => setAITrainingModalOpen(true)}
         onUpdateLead={handleUpdateLead}
         onDeleteLead={handleDeleteLead}
         onOpenEditModal={handleOpenEditModal}
@@ -1671,6 +1674,12 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
             companies={companies}
             onUpdateUser={handleUpdateUserByAdmin}
             onDeleteUser={handleDeleteUser}
+        />
+      )}
+      {isAITrainingModalOpen && currentUser.role === UserRole.SAAS_ADMIN && currentCompany && (
+        <AITrainingDashboard
+            companyId={currentCompany.id}
+            onClose={() => setAITrainingModalOpen(false)}
         />
       )}
        {isFormsModalOpen && (

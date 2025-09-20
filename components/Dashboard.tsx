@@ -4,7 +4,7 @@ import ActivityFeed from './ActivityFeed';
 import LeadCard from './LeadCard';
 import ReturningCallerStack from './ReturningCallerStack';
 import ReportsModal from './ReportsModal';
-import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon, ChartBarIcon, MapPinIcon } from './icons';
+import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon, ChartBarIcon, MapPinIcon, LightBulbIcon } from './icons';
 import Pagination from './Pagination';
 import { groupReturningCallers, calculateCallerTracking } from '../utils/callerTracking';
 import { useDistanceSorting } from '../hooks/useDistanceSorting';
@@ -24,6 +24,7 @@ interface DashboardProps {
   onToggleTheme: () => void;
   onRefreshLeads: (forceRefresh?: boolean) => Promise<void>;
   onOpenUserManagement: () => void;
+  onOpenAITraining: () => void;
   onLogout: () => void;
   onUpdateLead: (updatedLead: Lead) => void;
   onDeleteLead: (id: string) => void;
@@ -82,7 +83,7 @@ const TIME_PERIODS = {
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   leads, companies, currentCompany, currentUser, theme, isLoading,
-  onCompanyChange, onAddNew, onOpenSettings, onOpenProfile, onToggleTheme, onRefreshLeads, onOpenUserManagement, onLogout,
+  onCompanyChange, onAddNew, onOpenSettings, onOpenProfile, onToggleTheme, onRefreshLeads, onOpenUserManagement, onOpenAITraining, onLogout,
   onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenForms,
   elevenlabsApiKey, onOpenActivityModal, onOpenDetailedInsights
 }) => {
@@ -411,13 +412,22 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <Cog6ToothIcon className="w-5 h-5" />
               </button>
                {currentUser.role === UserRole.SAAS_ADMIN && (
-                <button
-                    onClick={onOpenUserManagement}
-                    className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors"
-                    title="Manage Users"
-                >
-                    <UsersIcon className="w-5 h-5" />
-                </button>
+                <>
+                  <button
+                      onClick={onOpenUserManagement}
+                      className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors"
+                      title="Manage Users"
+                  >
+                      <UsersIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                      onClick={onOpenAITraining}
+                      className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors"
+                      title="AI Training Dashboard"
+                  >
+                      <LightBulbIcon className="w-5 h-5" />
+                  </button>
+                </>
               )}
                <button onClick={onLogout} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors" title="Logout">
                   <ArrowLeftOnRectangleIcon className="w-5 h-5" />
