@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, LeadSource, Note } from '../types';
-import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon } from './icons';
+import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon, PrinterIcon, ChevronDownIcon } from './icons';
 import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
 import ConfirmationModal from './ConfirmationModal';
@@ -28,10 +28,27 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
+  const [isExportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [copiedItem, setCopiedItem] = useState<'email' | 'phone' | null>(null);
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isExportDropdownOpen) {
+        const target = event.target as Element;
+        const dropdown = target.closest('.export-dropdown');
+        if (!dropdown) {
+          setExportDropdownOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isExportDropdownOpen]);
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onUpdateLead({ ...lead, status: e.target.value as LeadStatus });
@@ -54,18 +71,216 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
     }
   };
   
-  const handleDownload = () => {
-    const leadData = JSON.stringify(lead, null, 2);
-    const blob = new Blob([leadData], { type: 'application/json' });
+  const handleDownloadCSV = () => {
+    // Prepare CSV data
+    const headers = [
+      'First Name', 'Last Name', 'Company', 'Email', 'Phone', 'Status', 
+      'Source', 'Created Date', 'Issue Description', 'Notes Count'
+    ];
+    
+    // Add AI Insights headers if available
+    if (lead.aiInsights) {
+      headers.push('Qualification Score', 'Key Pain Points', 'Suggested Next Steps');
+      if (lead.aiInsights.serviceType === 'legal' && lead.aiInsights.legalSpecific) {
+        headers.push('Case Type', 'Case Number', 'Urgency Level', 'Potential Value');
+      }
+    }
+    
+    // Add Call Details headers if available
+    if (lead.callDetails) {
+      headers.push('Call Summary', 'Call Date', 'Call Duration (min)');
+    }
+    
+    const csvData = [headers];
+    
+    // Prepare row data
+    const row = [
+      lead.firstName || '',
+      lead.lastName || '',
+      lead.company || '',
+      lead.email || '',
+      lead.phone || '',
+      lead.status || '',
+      lead.source || '',
+      new Date(lead.createdAt).toLocaleDateString(),
+      lead.issueDescription || '',
+      lead.notes?.length.toString() || '0'
+    ];
+    
+    // Add AI Insights data
+    if (lead.aiInsights) {
+      row.push(
+        lead.aiInsights.qualificationScore?.toString() || '',
+        lead.aiInsights.keyPainPoints?.join('; ') || '',
+        lead.aiInsights.suggestedNextSteps?.join('; ') || ''
+      );
+      if (lead.aiInsights.serviceType === 'legal' && lead.aiInsights.legalSpecific) {
+        row.push(
+          lead.aiInsights.legalSpecific.caseType || '',
+          lead.aiInsights.legalSpecific.caseNumber || '',
+          lead.aiInsights.legalSpecific.urgencyLevel || '',
+          lead.aiInsights.legalSpecific.potentialValue || ''
+        );
+      }
+    }
+    
+    // Add Call Details data
+    if (lead.callDetails) {
+      row.push(
+        lead.callDetails.summaryTitle || '',
+        lead.callDetails.callStartTime ? new Date(lead.callDetails.callStartTime).toLocaleDateString() : '',
+        lead.callDetails.callDuration ? Math.round(lead.callDetails.callDuration / 60).toString() : ''
+      );
+    }
+    
+    csvData.push(row);
+    
+    // Convert to CSV string
+    const csvContent = csvData.map(row => 
+      row.map(field => `"${field.toString().replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const safeName = (lead.firstName + '_' + lead.lastName).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    a.download = `lead_${safeName}_${lead.id.substring(0, 8)}.json`;
+    a.download = `lead_${safeName}_${lead.id.substring(0, 8)}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setExportDropdownOpen(false);
+  };
+
+  const handlePrintPDF = () => {
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const safeName = `${lead.firstName} ${lead.lastName}`.trim() || 'Lead';
+    
+    // Build HTML content for printing
+    let htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Lead Details - ${safeName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+          .header { border-bottom: 2px solid #14b8a6; padding-bottom: 10px; margin-bottom: 20px; }
+          .section { margin-bottom: 20px; }
+          .section h3 { color: #14b8a6; margin-bottom: 10px; }
+          .field { margin-bottom: 8px; }
+          .field strong { display: inline-block; width: 150px; }
+          .notes { background: #f8f9fa; padding: 10px; border-radius: 5px; }
+          .ai-insights { background: #f0f9ff; padding: 15px; border-radius: 5px; border-left: 4px solid #14b8a6; }
+          .legal-case { background: #fef3c7; padding: 10px; border-radius: 5px; margin-top: 10px; }
+          .call-details { background: #f3f4f6; padding: 15px; border-radius: 5px; }
+          @media print { 
+            body { margin: 0; } 
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Lead Details: ${safeName}</h1>
+          <p>Generated on ${new Date().toLocaleString()}</p>
+        </div>
+        
+        <div class="section">
+          <h3>Contact Information</h3>
+          <div class="field"><strong>Name:</strong> ${lead.firstName} ${lead.lastName}</div>
+          <div class="field"><strong>Company:</strong> ${lead.company || 'N/A'}</div>
+          <div class="field"><strong>Email:</strong> ${lead.email}</div>
+          <div class="field"><strong>Phone:</strong> ${lead.phone || 'N/A'}</div>
+          <div class="field"><strong>Status:</strong> ${lead.status}</div>
+          <div class="field"><strong>Source:</strong> ${lead.source}</div>
+          <div class="field"><strong>Created:</strong> ${new Date(lead.createdAt).toLocaleString()}</div>
+        </div>
+    `;
+    
+    if (lead.issueDescription) {
+      htmlContent += `
+        <div class="section">
+          <h3>Issue Description</h3>
+          <p>${lead.issueDescription}</p>
+        </div>
+      `;
+    }
+    
+    if (lead.aiInsights) {
+      htmlContent += `
+        <div class="section">
+          <h3>AI Insights</h3>
+          <div class="ai-insights">
+            <div class="field"><strong>Qualification Score:</strong> ${lead.aiInsights.qualificationScore}/100</div>
+            <div class="field"><strong>Justification:</strong> ${lead.aiInsights.justification}</div>
+            <div class="field"><strong>Key Pain Points:</strong> ${lead.aiInsights.keyPainPoints?.join(', ') || 'None identified'}</div>
+            <div class="field"><strong>Suggested Next Steps:</strong> ${lead.aiInsights.suggestedNextSteps?.join(', ') || 'None provided'}</div>
+      `;
+      
+      if (lead.aiInsights.serviceType === 'legal' && lead.aiInsights.legalSpecific) {
+        htmlContent += `
+            <div class="legal-case">
+              <h4>Legal Case Details</h4>
+              <div class="field"><strong>Case Type:</strong> ${lead.aiInsights.legalSpecific.caseType || 'N/A'}</div>
+              <div class="field"><strong>Case Number:</strong> ${lead.aiInsights.legalSpecific.caseNumber || 'N/A'}</div>
+              <div class="field"><strong>Urgency Level:</strong> ${lead.aiInsights.legalSpecific.urgencyLevel || 'N/A'}</div>
+              <div class="field"><strong>Potential Value:</strong> ${lead.aiInsights.legalSpecific.potentialValue || 'N/A'}</div>
+              <div class="field"><strong>Jurisdiction:</strong> ${lead.aiInsights.legalSpecific.jurisdiction || 'N/A'}</div>
+              <div class="field"><strong>Timeline Estimate:</strong> ${lead.aiInsights.legalSpecific.timelineEstimate || 'N/A'}</div>
+            </div>
+        `;
+      }
+      
+      htmlContent += `</div></div>`;
+    }
+    
+    if (lead.callDetails) {
+      htmlContent += `
+        <div class="section">
+          <h3>Call Details</h3>
+          <div class="call-details">
+            <div class="field"><strong>Summary:</strong> ${lead.callDetails.summaryTitle}</div>
+            <div class="field"><strong>Transcript:</strong> ${lead.callDetails.transcriptSummary}</div>
+            <div class="field"><strong>Date:</strong> ${lead.callDetails.callStartTime ? new Date(lead.callDetails.callStartTime).toLocaleString() : 'N/A'}</div>
+            <div class="field"><strong>Duration:</strong> ${lead.callDetails.callDuration ? Math.round(lead.callDetails.callDuration / 60) + ' minutes' : 'N/A'}</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    if (lead.notes && lead.notes.length > 0) {
+      htmlContent += `
+        <div class="section">
+          <h3>Notes (${lead.notes.length})</h3>
+          <div class="notes">
+      `;
+      lead.notes.forEach((note, index) => {
+        htmlContent += `
+          <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
+            <strong>Note ${index + 1}:</strong> ${note.text}<br>
+            <small>Added on ${new Date(note.createdAt).toLocaleString()}</small>
+          </div>
+        `;
+      });
+      htmlContent += `</div></div>`;
+    }
+    
+    htmlContent += `
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+    setExportDropdownOpen(false);
   };
   
   const handleWebhookClick = async () => {
@@ -370,9 +585,38 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                         <EnvelopeIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
                     )}
                 </button>
-                 <button onClick={handleDownload} title="Download Lead Data" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                    <ArrowDownTrayIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-                </button>
+                
+                {/* Export Dropdown */}
+                <div className="relative export-dropdown">
+                  <button 
+                    onClick={() => setExportDropdownOpen(!isExportDropdownOpen)}
+                    title="Export Lead Data" 
+                    className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                    <ChevronDownIcon className="w-3 h-3 text-slate-600 dark:text-slate-300" />
+                  </button>
+                  
+                  {isExportDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-10 min-w-[120px]">
+                      <button
+                        onClick={handleDownloadCSV}
+                        className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 rounded-t-lg"
+                      >
+                        <ArrowDownTrayIcon className="w-4 h-4" />
+                        CSV Export
+                      </button>
+                      <button
+                        onClick={handlePrintPDF}
+                        className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 rounded-b-lg"
+                      >
+                        <PrinterIcon className="w-4 h-4" />
+                        Print PDF
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
                 <button
                     onClick={handleWebhookClick}
                     title="Send to Webhook"
