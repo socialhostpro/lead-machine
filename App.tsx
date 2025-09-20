@@ -338,8 +338,10 @@ const App: React.FC = () => {
           console.log('✅ No new conversations found');
         }
       } else {
-        const errorData = await listResponse.text();
-        console.error(`🚨 Background ElevenLabs sync error (${listResponse.status}):`, errorData);
+        const errorText = await listResponse.text();
+        console.error(`🚨 ElevenLabs sync failed with status ${listResponse.status}:`, errorText);
+        console.error('🔑 Session token:', session?.access_token ? 'Present' : 'Missing');
+        console.error('🏢 Company ID:', currentCompany?.id);
       }
     } catch (error) {
       console.error('🚨 Background ElevenLabs sync failed:', error);
