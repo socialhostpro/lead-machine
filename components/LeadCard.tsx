@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, LeadSource, Note } from '../types';
 import { BuildingOfficeIcon, UserIcon, PhoneIcon, PencilIcon, TrashIcon, ChatBubbleLeftIcon, EnvelopeIcon, ClipboardIcon, CheckIcon, ArrowDownTrayIcon, PaperAirplaneIcon, ArrowPathIcon, LightBulbIcon, PrinterIcon, ChevronDownIcon } from './icons';
 import StatusBadge from './StatusBadge';
@@ -30,6 +30,8 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
   const [isContactModalOpen, setContactModalOpen] = useState(false);
   const [isEmailModalOpen, setEmailModalOpen] = useState(false);
   const [isExportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [copiedItem, setCopiedItem] = useState<'email' | 'phone' | null>(null);
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
@@ -50,6 +52,24 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isExportDropdownOpen]);
+
+  // Handle dropdown positioning to prevent overflow
+  const handleDropdownOpen = () => {
+    if (dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const dropdownHeight = 100; // Approximate height of dropdown
+      
+      // If not enough space below, position above
+      if (spaceBelow < dropdownHeight) {
+        setDropdownPosition('top');
+      } else {
+        setDropdownPosition('bottom');
+      }
+    }
+    setExportDropdownOpen(!isExportDropdownOpen);
+  };
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onUpdateLead({ ...lead, status: e.target.value as LeadStatus });
@@ -597,9 +617,9 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                 </button>
                 
                 {/* Export Dropdown */}
-                <div className="relative export-dropdown">
+                <div className="relative export-dropdown" ref={dropdownRef}>
                   <button 
-                    onClick={() => setExportDropdownOpen(!isExportDropdownOpen)}
+                    onClick={handleDropdownOpen}
                     title="Export Lead Data" 
                     className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
                   >
@@ -608,7 +628,11 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                   </button>
                   
                   {isExportDropdownOpen && (
-                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-10 min-w-[120px]">
+                    <div className={`absolute right-0 ${
+                      dropdownPosition === 'top' 
+                        ? 'bottom-full mb-1' 
+                        : 'top-full mt-1'
+                    } bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-10 min-w-[120px]`}>
                       <button
                         onClick={handleDownloadCSV}
                         className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 rounded-t-lg"

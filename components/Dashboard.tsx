@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Lead, LeadStatus, Company, User, UserRole, Note } from '../types';
+import { Lead, LeadStatus, Company, User, UserRole } from '../types';
 import ActivityFeed from './ActivityFeed';
 import LeadCard from './LeadCard';
 import ReturningCallerStack from './ReturningCallerStack';
-import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon } from './icons';
+import ReportsModal from './ReportsModal';
+import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon, ChartBarIcon } from './icons';
 import Pagination from './Pagination';
 import { groupReturningCallers, calculateCallerTracking } from '../utils/callerTracking';
 
@@ -46,6 +47,8 @@ const TABS: (LeadStatus | 'All')[] = ['All', LeadStatus.NEW, LeadStatus.CONTACTE
 
 const SORT_OPTIONS = {
   'callDate_desc': 'Latest Caller First',
+  'timeBasedStatus_asc': 'Hours Since Contact (Least)',
+  'timeBasedStatus_desc': 'Hours Since Contact (Most)',
   'createdAt_desc': 'Newest First',
   'createdAt_asc': 'Oldest First',
   'firstName_asc': 'First Name (A-Z)',
@@ -65,6 +68,14 @@ const SORT_OPTIONS = {
 const ITEMS_PER_PAGE = 8;
 const REFRESH_INTERVAL_SECONDS = 300; // 5 minutes
 
+const TIME_PERIODS = {
+  'today': 'Today',
+  'week': 'This Week', 
+  'month': 'This Month',
+  'year': 'This Year',
+  'all': 'All Time'
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ 
   leads, companies, currentCompany, currentUser, theme, isLoading,
   onCompanyChange, onAddNew, onOpenSettings, onOpenProfile, onToggleTheme, onRefreshLeads, onOpenUserManagement, onLogout,
@@ -74,11 +85,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('callDate_desc');
+  const [timePeriod, setTimePeriod] = useState<keyof typeof TIME_PERIODS>('all');
   const [mobileStatsVisible, setMobileStatsVisible] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SECONDS);
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
+  const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -104,15 +117,47 @@ const Dashboard: React.FC<DashboardProps> = ({
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  const filterLeadsByTimePeriod = (leads: Lead[], period: keyof typeof TIME_PERIODS): Lead[] => {
+    if (period === 'all') return leads;
+    
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (period) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startDate = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate());
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'year':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        return leads;
+    }
+    
+    return leads.filter(lead => new Date(lead.createdAt) >= startDate);
+  };
+
+  const filteredLeadsByTime = useMemo(() => {
+    return filterLeadsByTimePeriod(leads, timePeriod);
+  }, [leads, timePeriod]);
+
   const stats = useMemo(() => ({
-    total: leads.length,
-    new: leads.filter(l => l.status === LeadStatus.NEW).length,
-    qualified: leads.filter(l => l.status === LeadStatus.QUALIFIED).length,
-    won: leads.filter(l => l.status === LeadStatus.CLOSED_WON).length,
-  }), [leads]);
+    total: filteredLeadsByTime.length,
+    new: filteredLeadsByTime.filter(l => l.status === LeadStatus.NEW).length,
+    qualified: filteredLeadsByTime.filter(l => l.status === LeadStatus.QUALIFIED).length,
+    won: filteredLeadsByTime.filter(l => l.status === LeadStatus.CLOSED_WON).length,
+  }), [filteredLeadsByTime]);
 
   const filteredAndSortedLeads = useMemo(() => {
-    let filteredLeads = [...leads];
+    let filteredLeads = [...filteredLeadsByTime];
 
     if (activeTab !== 'All') {
       filteredLeads = filteredLeads.filter(lead => lead.status === activeTab);
@@ -139,6 +184,28 @@ const Dashboard: React.FC<DashboardProps> = ({
                 const aCallTime = a.callDetails?.callStartTime ? new Date(a.callDetails.callStartTime).getTime() : new Date(a.createdAt).getTime();
                 const bCallTime = b.callDetails?.callStartTime ? new Date(b.callDetails.callStartTime).getTime() : new Date(b.createdAt).getTime();
                 return bCallTime - aCallTime;
+            case 'timeBasedStatus_asc':
+                // Sort by hours since last contact (least hours first)
+                const aTracking = calculateCallerTracking(leads, a);
+                const bTracking = calculateCallerTracking(leads, b);
+                const aHours = aTracking.lastContactTime ? 
+                    (Date.now() - new Date(aTracking.lastContactTime).getTime()) / (1000 * 60 * 60) : 
+                    999999; // Never contacted gets highest number
+                const bHours = bTracking.lastContactTime ? 
+                    (Date.now() - new Date(bTracking.lastContactTime).getTime()) / (1000 * 60 * 60) : 
+                    999999;
+                return aHours - bHours;
+            case 'timeBasedStatus_desc':
+                // Sort by hours since last contact (most hours first)
+                const aTrackingDesc = calculateCallerTracking(leads, a);
+                const bTrackingDesc = calculateCallerTracking(leads, b);
+                const aHoursDesc = aTrackingDesc.lastContactTime ? 
+                    (Date.now() - new Date(aTrackingDesc.lastContactTime).getTime()) / (1000 * 60 * 60) : 
+                    999999;
+                const bHoursDesc = bTrackingDesc.lastContactTime ? 
+                    (Date.now() - new Date(bTrackingDesc.lastContactTime).getTime()) / (1000 * 60 * 60) : 
+                    999999;
+                return bHoursDesc - aHoursDesc;
             case 'createdAt_asc':
                 return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
             case 'firstName_asc':
@@ -172,7 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
 
     return filteredLeads;
-  }, [leads, activeTab, searchQuery, sortOption, showOnlyWithPhone]);
+  }, [filteredLeadsByTime, activeTab, searchQuery, sortOption, showOnlyWithPhone]);
 
   // Group returning callers and prepare display data
   const groupedLeads = useMemo(() => {
@@ -355,6 +422,35 @@ const Dashboard: React.FC<DashboardProps> = ({
             </button>
         </div>
 
+        {/* Time Period Selector */}
+        <div className="mb-6">
+          <div className="flex flex-wrap gap-2">
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-300 self-center mr-2">
+              Time Period:
+            </span>
+            {Object.entries(TIME_PERIODS).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTimePeriod(key as keyof typeof TIME_PERIODS)}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  timePeriod === key
+                    ? 'bg-blue-500 text-white dark:bg-blue-600'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              onClick={() => setIsReportsModalOpen(true)}
+              className="ml-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+              <ChartBarIcon className="w-4 h-4" />
+              AI Reports
+            </button>
+          </div>
+        </div>
+
         <div className={`grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 ${mobileStatsVisible ? 'grid' : 'hidden'} md:grid`}>
             <StatCard title="Total Leads" value={stats.total} color="text-blue-500 dark:text-blue-400" />
             <StatCard title="New" value={stats.new} color="text-yellow-500 dark:text-yellow-400" />
@@ -498,6 +594,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <ActivityFeed leads={leads} onSelectLead={onOpenActivityModal} />
             </aside>
         </main>
+        
+        {/* AI Reports Modal */}
+        <ReportsModal
+          isOpen={isReportsModalOpen}
+          onClose={() => setIsReportsModalOpen(false)}
+          leads={leads}
+          timePeriod={timePeriod}
+        />
       </div>
     </div>
   );

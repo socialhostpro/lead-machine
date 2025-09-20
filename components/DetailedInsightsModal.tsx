@@ -1,6 +1,6 @@
 import React from 'react';
 import { AIInsights } from '../types';
-import { XMarkIcon, LightBulbIcon, ScaleIcon, ClockIcon, MapPinIcon, CurrencyDollarIcon, ExclamationTriangleIcon } from './icons';
+import { XMarkIcon, LightBulbIcon, ScaleIcon, ClockIcon, MapPinIcon, CurrencyDollarIcon, ExclamationTriangleIcon, PrinterIcon, ArrowDownTrayIcon } from './icons';
 
 interface DetailedInsightsModalProps {
   isOpen: boolean;
@@ -16,6 +16,152 @@ const DetailedInsightsModal: React.FC<DetailedInsightsModalProps> = ({
   leadName
 }) => {
   if (!isOpen || !insights) return null;
+
+  const handleDownloadPDF = () => {
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    // Build HTML content for PDF export
+    let htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>AI Insights Report - ${leadName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #333; line-height: 1.6; }
+          .header { border-bottom: 3px solid #14b8a6; padding-bottom: 15px; margin-bottom: 30px; }
+          .header h1 { color: #14b8a6; margin: 0; font-size: 28px; }
+          .header .lead-name { color: #666; font-size: 18px; margin-top: 5px; }
+          .section { margin-bottom: 25px; }
+          .section h2 { color: #14b8a6; margin-bottom: 15px; font-size: 20px; border-bottom: 1px solid #e5e5e5; padding-bottom: 5px; }
+          .section h3 { color: #333; margin-bottom: 10px; font-size: 16px; }
+          .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+          .overview-item { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #14b8a6; }
+          .score { font-size: 24px; font-weight: bold; color: #14b8a6; }
+          .justification { background: #f0f9ff; padding: 15px; border-radius: 8px; margin: 15px 0; }
+          .pain-points { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; }
+          .next-steps { background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 15px 0; }
+          .legal-case { background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+          .legal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+          .legal-item { margin-bottom: 10px; }
+          .legal-item strong { display: inline-block; width: 120px; color: #92400e; }
+          ul, ol { padding-left: 20px; }
+          li { margin-bottom: 8px; }
+          .urgency-critical { color: #dc2626; font-weight: bold; }
+          .urgency-high { color: #ea580c; font-weight: bold; }
+          .urgency-medium { color: #ca8a04; font-weight: bold; }
+          .urgency-low { color: #16a34a; font-weight: bold; }
+          @media print { 
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>AI Insights Report</h1>
+          <div class="lead-name">${leadName}</div>
+          <p style="color: #666; margin-top: 10px;">Generated on ${new Date().toLocaleString()}</p>
+        </div>
+        
+        <div class="overview-grid">
+          <div class="overview-item">
+            <h3>Qualification Score</h3>
+            <div class="score">${insights.qualificationScore}/100</div>
+          </div>
+          <div class="overview-item">
+            <h3>Service Type</h3>
+            <div style="font-weight: bold; text-transform: capitalize;">${insights.serviceType || 'General'}</div>
+          </div>
+        </div>
+        
+        <div class="section">
+          <h2>Analysis Overview</h2>
+          <div class="justification">
+            <h3>Qualification Justification</h3>
+            <p>${insights.justification}</p>
+          </div>
+        </div>
+    `;
+    
+    // Add detailed analysis if available
+    if (insights.detailedAnalysis) {
+      htmlContent += `
+        <div class="section">
+          <h2>Detailed Analysis</h2>
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+            <p>${insights.detailedAnalysis}</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Add pain points
+    if (insights.keyPainPoints && insights.keyPainPoints.length > 0) {
+      htmlContent += `
+        <div class="section">
+          <h2>Key Pain Points</h2>
+          <div class="pain-points">
+            <ul>
+              ${insights.keyPainPoints.map(point => `<li>${point}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Add next steps
+    if (insights.suggestedNextSteps && insights.suggestedNextSteps.length > 0) {
+      htmlContent += `
+        <div class="section">
+          <h2>Suggested Next Steps</h2>
+          <div class="next-steps">
+            <ol>
+              ${insights.suggestedNextSteps.map(step => `<li>${step}</li>`).join('')}
+            </ol>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Add legal case details if available
+    if (insights.serviceType === 'legal' && insights.legalSpecific) {
+      const legal = insights.legalSpecific;
+      const urgencyClass = legal.urgencyLevel ? `urgency-${legal.urgencyLevel}` : '';
+      
+      htmlContent += `
+        <div class="section">
+          <h2>Legal Case Analysis</h2>
+          <div class="legal-case">
+            <div class="legal-grid">
+              <div class="legal-item"><strong>Case Type:</strong> ${legal.caseType || 'N/A'}</div>
+              <div class="legal-item"><strong>Case Number:</strong> ${legal.caseNumber || 'N/A'}</div>
+              <div class="legal-item"><strong>Urgency:</strong> <span class="${urgencyClass}">${legal.urgencyLevel || 'N/A'}</span></div>
+              <div class="legal-item"><strong>Potential Value:</strong> ${legal.potentialValue || 'N/A'}</div>
+              <div class="legal-item"><strong>Jurisdiction:</strong> ${legal.jurisdiction || 'N/A'}</div>
+              <div class="legal-item"><strong>Timeline:</strong> ${legal.timelineEstimate || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    htmlContent += `
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
+
+  const handlePrintReport = () => {
+    handleDownloadPDF();
+  };
 
   const getUrgencyColor = (urgency?: string) => {
     switch (urgency) {
@@ -215,7 +361,26 @@ const DetailedInsightsModal: React.FC<DetailedInsightsModalProps> = ({
 
         {/* Footer */}
         <div className="border-t border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            {/* Export buttons on the left */}
+            <div className="flex space-x-3">
+              <button
+                onClick={handleDownloadPDF}
+                className="flex items-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                Download PDF
+              </button>
+              <button
+                onClick={handlePrintReport}
+                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                <PrinterIcon className="w-4 h-4 mr-2" />
+                Print
+              </button>
+            </div>
+            
+            {/* Close button on the right */}
             <button
               onClick={onClose}
               className="px-6 py-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-white font-semibold rounded-lg transition-colors"

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Lead, LeadStatus, LeadSource, Note } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Lead, LeadStatus, LeadSource, Note, CallLog } from '../types';
 import { 
   XMarkIcon, 
   BuildingOfficeIcon, 
   UserIcon, 
   PhoneIcon, 
+  PhoneOutgoingIcon,
   EnvelopeIcon, 
   ClipboardIcon, 
   CheckIcon, 
@@ -13,7 +14,8 @@ import {
   ArrowPathIcon, 
   LightBulbIcon,
   PencilIcon,
-  ChatBubbleLeftIcon
+  ChatBubbleLeftIcon,
+  ClockIcon
 } from './icons';
 import StatusBadge from './StatusBadge';
 import CollapsibleSection from './CollapsibleSection';
@@ -54,8 +56,34 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
   const [isSendingWebhook, setIsSendingWebhook] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  
+  // Call tracking state
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [callStartTime, setCallStartTime] = useState<Date | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [callTimer, setCallTimer] = useState<NodeJS.Timeout | null>(null);
+  const [autoStopTimer, setAutoStopTimer] = useState<NodeJS.Timeout | null>(null);
 
   if (!isOpen || !lead) return null;
+
+  // Cleanup call timer when component unmounts or modal closes
+  useEffect(() => {
+    return () => {
+      if (callTimer) {
+        clearInterval(callTimer);
+      }
+      if (autoStopTimer) {
+        clearTimeout(autoStopTimer);
+      }
+    };
+  }, [callTimer, autoStopTimer]);
+
+  // Reset call state when modal closes
+  useEffect(() => {
+    if (!isOpen && isCallActive) {
+      handleEndCall();
+    }
+  }, [isOpen]);
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onUpdateLead({ ...lead, status: e.target.value as LeadStatus });
@@ -63,6 +91,104 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
 
   const handleContactAction = () => {
     onUpdateLead({ ...lead, status: LeadStatus.CONTACTED });
+  };
+  
+  const handleDialNumber = () => {
+    if (!lead.phone) return;
+    
+    if (isCallActive) {
+      // End the call
+      handleEndCall();
+    } else {
+      // Start the call
+      handleStartCall();
+    }
+  };
+  
+  const handleStartCall = () => {
+    setIsCallActive(true);
+    const startTime = new Date();
+    setCallStartTime(startTime);
+    setCallDuration(0);
+    
+    // Start timer to track call duration
+    const timer = setInterval(() => {
+      const now = new Date();
+      const duration = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      setCallDuration(duration);
+    }, 1000);
+    
+    setCallTimer(timer);
+    
+    // Auto-stop timer after 10 minutes (600 seconds)
+    const autoStop = setTimeout(() => {
+      console.log('Auto-stopping call after 10 minutes of inactivity');
+      handleEndCall();
+    }, 10 * 60 * 1000); // 10 minutes in milliseconds
+    
+    setAutoStopTimer(autoStop);
+    
+    // Initiate the actual phone call (this would typically use a telephony service)
+    // For now, we'll just open the tel: link
+    if (lead.phone) {
+      window.open(`tel:${lead.phone}`, '_self');
+    }
+  };
+  
+  const handleEndCall = async () => {
+    if (callTimer) {
+      clearInterval(callTimer);
+      setCallTimer(null);
+    }
+    
+    if (autoStopTimer) {
+      clearTimeout(autoStopTimer);
+      setAutoStopTimer(null);
+    }
+    
+    const endTime = new Date();
+    const duration = callStartTime ? Math.floor((endTime.getTime() - callStartTime.getTime()) / 1000) : 0;
+    
+    setIsCallActive(false);
+    
+    // Create new call log entry
+    const newCallLog: CallLog = {
+      startTime: callStartTime?.toISOString() || endTime.toISOString(),
+      endTime: endTime.toISOString(),
+      duration: duration,
+      type: 'outgoing',
+      status: duration > 0 ? 'completed' : 'cancelled'
+    };
+    
+    // Get existing call history
+    const existingHistory = lead.callDetails?.callHistory || [];
+    
+    // Update lead with call information
+    const updatedLead = {
+      ...lead,
+      status: LeadStatus.CONTACTED,
+      lastContactedAt: endTime.toISOString(),
+      callDetails: {
+        ...lead.callDetails,
+        conversationId: lead.callDetails?.conversationId || '',
+        summaryTitle: lead.callDetails?.summaryTitle || 'Phone Call',
+        transcriptSummary: lead.callDetails?.transcriptSummary || '',
+        lastOutgoingCall: newCallLog,
+        callHistory: [newCallLog, ...existingHistory].slice(0, 10) // Keep last 10 calls
+      }
+    };
+    
+    onUpdateLead(updatedLead);
+    
+    // Reset call state
+    setCallStartTime(null);
+    setCallDuration(0);
+  };
+  
+  const formatCallDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
   const handleCopy = (text: string, item: 'email' | 'phone') => {
@@ -211,24 +337,125 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                   
                   {/* Phone */}
                   {lead.phone && (
-                    <div className="flex items-center space-x-3">
-                      <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                      <span className="text-slate-800 dark:text-white">{lead.phone}</span>
-                      <button
-                        onClick={() => handleCopy(lead.phone, 'phone')}
-                        className="p-1 text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors"
-                        title="Copy phone"
-                      >
-                        {copiedItem === 'phone' ? (
-                          <CheckIcon className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <ClipboardIcon className="w-4 h-4" />
-                        )}
-                      </button>
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-3">
+                        <PhoneIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                        <span className="text-slate-800 dark:text-white">{lead.phone}</span>
+                        <button
+                          onClick={() => handleCopy(lead.phone, 'phone')}
+                          className="p-1 text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors"
+                          title="Copy phone"
+                        >
+                          {copiedItem === 'phone' ? (
+                            <CheckIcon className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <ClipboardIcon className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={handleDialNumber}
+                          className={`p-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+                            isCallActive 
+                              ? 'bg-red-600 hover:bg-red-700 text-white' 
+                              : 'bg-green-600 hover:bg-green-700 text-white'
+                          }`}
+                          title={isCallActive ? 'End Call' : 'Dial Number'}
+                        >
+                          <PhoneOutgoingIcon className="w-4 h-4" />
+                          <span className="text-sm">
+                            {isCallActive ? 'End Call' : 'Dial'}
+                          </span>
+                        </button>
+                      </div>
+                      {/* Call Timer */}
+                      {isCallActive && (
+                        <div className="flex items-center space-x-2 ml-7 text-sm">
+                          <ClockIcon className="w-4 h-4 text-green-600" />
+                          <span className="text-green-600 font-mono">
+                            Call in progress: {formatCallDuration(callDuration)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Call History */}
+              {lead.phone && (lead.callDetails?.callHistory || lead.callDetails?.lastOutgoingCall) && (
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3 flex items-center">
+                    <ClockIcon className="w-5 h-5 mr-2 text-slate-600 dark:text-slate-400" />
+                    Call History
+                  </h3>
+                  <div className="space-y-2">
+                    {/* Most recent outgoing call */}
+                    {lead.callDetails?.lastOutgoingCall && (
+                      <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-600 rounded-lg border border-slate-200 dark:border-slate-500">
+                        <div className="flex items-center space-x-3">
+                          <PhoneOutgoingIcon className="w-4 h-4 text-green-600" />
+                          <div>
+                            <div className="text-sm font-medium text-slate-900 dark:text-white">
+                              Outgoing Call
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                              {new Date(lead.callDetails.lastOutgoingCall.startTime).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">
+                            {formatCallDuration(lead.callDetails.lastOutgoingCall.duration)}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                            {lead.callDetails.lastOutgoingCall.status || 'completed'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Additional call history if available */}
+                    {lead.callDetails?.callHistory && lead.callDetails.callHistory.length > 0 && (
+                      <>
+                        {lead.callDetails.callHistory.slice(0, 3).map((call, index) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-slate-600 rounded-lg border border-slate-200 dark:border-slate-500">
+                            <div className="flex items-center space-x-3">
+                              {call.type === 'incoming' ? (
+                                <PhoneIcon className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <PhoneOutgoingIcon className="w-4 h-4 text-green-600" />
+                              )}
+                              <div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white capitalize">
+                                  {call.type} Call
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  {new Date(call.startTime).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                {formatCallDuration(call.duration)}
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                                {call.status || 'completed'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {lead.callDetails.callHistory.length > 3 && (
+                          <div className="text-center">
+                            <button className="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                              View all {lead.callDetails.callHistory.length} calls
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Status */}
               <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">

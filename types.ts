@@ -26,6 +26,15 @@ export enum LeadSource {
   WEB_FORM = 'Web Form',
 }
 
+export interface CallLog {
+  id?: string;
+  startTime: string; // ISO timestamp
+  endTime: string; // ISO timestamp
+  duration: number; // Duration in seconds
+  type: 'incoming' | 'outgoing';
+  status?: 'completed' | 'missed' | 'cancelled';
+}
+
 export interface CallDetails {
   conversationId: string;
   agentId?: string;
@@ -33,6 +42,8 @@ export interface CallDetails {
   transcriptSummary: string;
   callStartTime?: string; // ISO timestamp from ElevenLabs start_time_unix_secs
   callDuration?: number;  // Duration in seconds
+  lastOutgoingCall?: CallLog; // Most recent outgoing call
+  callHistory?: CallLog[]; // Full call history
 }
 
 export interface CallerTracking {

@@ -39,6 +39,7 @@ class ToastManager {
 
   private renderToast(toast: Toast): HTMLElement {
     const toastElement = document.createElement('div');
+    toastElement.setAttribute('data-id', toast.id);
     toastElement.className = `
       toast-item
       min-w-[300px] max-w-md p-4 rounded-lg shadow-lg border
@@ -70,7 +71,10 @@ class ToastManager {
     // Add click handler to close
     const closeButton = toastElement.querySelector('button');
     if (closeButton) {
-      closeButton.addEventListener('click', () => this.remove(toast.id));
+      closeButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.remove(toast.id);
+      });
     }
 
     // Auto-remove after duration

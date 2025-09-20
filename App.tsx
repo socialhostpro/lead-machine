@@ -105,7 +105,7 @@ const App: React.FC = () => {
   const [forms, setForms] = useState<WebForm[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
   
-  // UI State
+  // UI State - Start with optimistic loading state
   const [loading, setLoading] = useState(true);
   const [isLeadsLoading, setIsLeadsLoading] = useState(true);
   const [isNewLeadModalOpen, setNewLeadModalOpen] = useState(false);
@@ -133,16 +133,29 @@ const App: React.FC = () => {
   useEffect(() => {
     requestNotificationPermission();
 
+    // Initialize session immediately on app start
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Auth initialization error:', error);
+        }
+        setSession(session);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+        setLoading(false);
+      }
+    };
+
     // Handle Auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoading(false);
     });
     
-    supabase.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-        setLoading(false);
-    });
+    // Initialize auth immediately
+    initializeAuth();
 
     return () => {
       subscription.unsubscribe();

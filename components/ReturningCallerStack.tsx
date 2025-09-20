@@ -61,7 +61,7 @@ const ReturningCallerStack: React.FC<ReturningCallerStackProps> = ({
     <div className="space-y-2">
       {/* Header Card - Shows primary lead with call statistics */}
       <div className="relative">
-        <div className="absolute -top-1 -right-1 z-10">
+        <div className="absolute -top-1 right-8 z-10">
           <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
             <PhoneIcon className="w-3 h-3" />
             <span className="font-semibold">{callCount}</span>

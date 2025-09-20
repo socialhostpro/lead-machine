@@ -18,19 +18,38 @@ serve(async (req) => {
   }
 
   try {
-    // Create Supabase client
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    // Get the request data
-    const { type, messageData, recipientEmails, companyId } = await req.json()
-
-    // Get SendGrid API key from environment
-    const sendgridApiKey = Deno.env.get('SENDGRID_API_KEY')
+    // Validate environment variables first
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const sendgridApiKey = Deno.env.get('SENDGRID_API_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase configuration missing');
+    }
+    
     if (!sendgridApiKey) {
-      throw new Error('SendGrid API key not configured')
+      throw new Error('SendGrid API key not configured');
+    }
+
+    // Create Supabase client
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Get and validate the request data
+    let requestData;
+    try {
+      requestData = await req.json();
+    } catch (e) {
+      throw new Error('Invalid JSON in request body');
+    }
+    
+    const { type, messageData, recipientEmails, companyId } = requestData;
+    
+    if (!type || !messageData || !recipientEmails || !Array.isArray(recipientEmails)) {
+      throw new Error('Missing required fields: type, messageData, or recipientEmails');
+    }
+    
+    if (recipientEmails.length === 0) {
+      throw new Error('No recipient emails provided');
     }
 
     // Get company email settings
@@ -190,14 +209,36 @@ Dashboard: https://leads.imaginecapital.ai
 
   } catch (error) {
     console.error('SendGrid notification error:', error)
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    })
+    
+    // Provide more specific error information
+    let errorMessage = 'Email notification failed';
+    let statusCode = 500;
+    
+    if (error.message.includes('SendGrid API key not configured')) {
+      errorMessage = 'SendGrid API key is not configured';
+      statusCode = 500;
+    } else if (error.message.includes('SendGrid API error')) {
+      errorMessage = `SendGrid service error: ${error.message}`;
+      statusCode = 502;
+    } else if (error.message.includes('JSON')) {
+      errorMessage = 'Invalid request format';
+      statusCode = 400;
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message,
-        success: false 
+        error: errorMessage,
+        success: false,
+        timestamp: new Date().toISOString()
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
+        status: statusCode
       }
     )
   }
