@@ -29,6 +29,7 @@ interface DashboardProps {
   onSendEmail: (lead: Lead) => Promise<void>;
   onOpenForms: () => void;
   elevenlabsApiKey?: string;
+  onOpenActivityModal: (leadId: string) => void;
 }
 
 const StatCard: React.FC<{ title: string; value: number; color: string }> = ({ title, value, color }) => (
@@ -64,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   leads, companies, currentCompany, currentUser, theme, isLoading,
   onCompanyChange, onAddNew, onOpenSettings, onOpenProfile, onToggleTheme, onRefreshLeads, onOpenUserManagement, onLogout,
   onUpdateLead, onDeleteLead, onOpenEditModal, onOpenAddNoteModal, onSendToWebhook, onGenerateInsights, onSendEmail, onOpenForms,
-  elevenlabsApiKey
+  elevenlabsApiKey, onOpenActivityModal
 }) => {
   const [activeTab, setActiveTab] = useState<LeadStatus | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -363,6 +364,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 value={sortOption}
                                 onChange={(e) => setSortOption(e.target.value)}
                                 className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg py-2 pl-3 pr-8 text-slate-800 dark:text-white focus:ring-teal-500 focus:border-teal-500 w-full md:w-auto"
+                                aria-label="Sort leads"
+                                title="Sort leads"
                             >
                                 {Object.entries(SORT_OPTIONS).map(([key, value]) => (
                                     <option key={key} value={key}>{value}</option>
@@ -440,7 +443,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 )}
             </div>
             <aside>
-                <ActivityFeed leads={leads} onSelectLead={handleSelectLead} />
+                <ActivityFeed leads={leads} onSelectLead={onOpenActivityModal} />
             </aside>
         </main>
       </div>

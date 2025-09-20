@@ -19,6 +19,7 @@ import FormsManagementModal from './components/FormsManagementModal';
 import EmbedCodeModal from './components/EmbedCodeModal';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { EmailNotificationManager, sendNewMessageNotification, getEmailNotificationConfig } from './utils/emailNotifications';
+import ActivityCallModal from './components/ActivityCallModal';
 
 
 // Helper to get a user-friendly error message from a Supabase error object.
@@ -114,12 +115,14 @@ const App: React.FC = () => {
   const [isUserManagementModalOpen, setUserManagementModalOpen] = useState(false);
   const [isFormsModalOpen, setFormsModalOpen] = useState(false);
   const [isEmbedCodeModalOpen, setEmbedCodeModalOpen] = useState(false);
+  const [isActivityCallModalOpen, setActivityCallModalOpen] = useState(false);
 
 
   // Data for modals
   const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
   const [leadForNewNote, setLeadForNewNote] = useState<Lead | null>(null);
   const [selectedFormForEmbed, setSelectedFormForEmbed] = useState<WebForm | null>(null);
+  const [selectedActivityLead, setSelectedActivityLead] = useState<Lead | null>(null);
   
   // FIX: Removed `as any` cast. Types for `import.meta.env` are now available globally.
   // const elevenLabsApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY; // Removed - now using Edge Functions
@@ -1041,6 +1044,14 @@ Please log in to the Lead Machine to review and respond to this lead.`;
       setAddNoteModalOpen(true);
   };
   
+  const handleOpenActivityModal = (leadId: string) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (lead) {
+      setSelectedActivityLead(lead);
+      setActivityCallModalOpen(true);
+    }
+  };
+  
   const handleSaveNote = async (noteText: string) => {
       if (!leadForNewNote) return;
       const newNote: Note = {
@@ -1389,6 +1400,7 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
         onSendEmail={handleSendEmail}
         onLogout={handleLogout}
         elevenlabsApiKey={undefined}
+        onOpenActivityModal={handleOpenActivityModal}
       />
       
       <LeadFormModal 
@@ -1460,6 +1472,21 @@ ${lead.notes && lead.notes.length > 0 ? `Notes:\n${lead.notes.map(note => `- ${n
             formId={selectedFormForEmbed.id}
         />
       )}
+      
+      <ActivityCallModal
+        isOpen={isActivityCallModalOpen}
+        onClose={() => setActivityCallModalOpen(false)}
+        lead={selectedActivityLead}
+        elevenlabsApiKey={undefined}
+        onUpdateLead={handleUpdateLead}
+        onOpenEditModal={handleOpenEditModal}
+        onOpenAddNoteModal={handleOpenAddNoteModal}
+        onSendToWebhook={handleSendToWebhook}
+        onGenerateInsights={handleGenerateInsights}
+        onSendEmail={handleSendEmail}
+        userEmail={currentUser?.email}
+        companyId={currentCompany?.id}
+      />
     </>
   );
 };
