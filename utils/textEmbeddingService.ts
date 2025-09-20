@@ -1,7 +1,9 @@
 // Text Embedding Service
-// Generates vector embeddings using OpenAI's text-embedding-ada-002 model
+// Generates vector embeddings using Supabase's native vector capabilities
+// No external API keys required - uses local sentence-transformer models
 
 import { VectorContent } from './aiTrainingDataCollector';
+import { supabase } from './supabase';
 
 export interface EmbeddingResult {
   embedding: number[];
@@ -13,36 +15,28 @@ export interface BatchEmbeddingResult {
   successful: Array<{ index: number; embedding: number[]; tokens: number }>;
   failed: Array<{ index: number; error: string; content: string }>;
   totalTokens: number;
-  totalCost: number; // Estimated cost in USD
+  totalCost: number; // Always 0 for Supabase embeddings
 }
 
 export class TextEmbeddingService {
-  private readonly OPENAI_API_URL = 'https://api.openai.com/v1/embeddings';
-  private readonly MODEL = 'text-embedding-ada-002';
-  private readonly MAX_TOKENS = 8192; // Max tokens per request for ada-002
+  private readonly SUPABASE_FUNCTION_URL = 'supabase-embeddings';
+  private readonly MODEL = 'gte-small'; // Supabase-compatible model
+  private readonly MAX_TOKENS = 8192; // Max tokens per request
   private readonly MAX_BATCH_SIZE = 100; // Max items per batch request
   private readonly RATE_LIMIT_DELAY = 100; // Delay between requests in ms
-  private readonly COST_PER_1K_TOKENS = 0.0001; // OpenAI pricing for ada-002
+  private readonly EMBEDDING_DIMENSIONS = 384; // gte-small dimensions
 
-  private apiKey: string;
   private requestCount = 0;
   private totalTokensUsed = 0;
 
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.OPENAI_API_KEY || '';
-    if (!this.apiKey) {
-      console.warn('OpenAI API key not provided. Embedding generation will fail.');
-    }
+  constructor() {
+    console.log('TextEmbeddingService initialized with Supabase native embeddings');
   }
 
   /**
    * Generate embedding for a single text
    */
   async generateEmbedding(text: string): Promise<EmbeddingResult> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-
     if (!text || text.trim().length === 0) {
       throw new Error('Text content is required for embedding generation');
     }
@@ -50,33 +44,35 @@ export class TextEmbeddingService {
     const processedText = this.preprocessText(text);
     
     try {
-      const response = await fetch(this.OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      this.requestCount++;
+      
+      const { data, error } = await supabase.functions.invoke('supabase-embeddings', {
+        body: {
+          texts: [processedText],
           model: this.MODEL,
-          input: processedText,
-          encoding_format: 'float',
-        }),
+          options: {
+            normalize: true,
+            truncate: true
+          }
+        }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+      if (error) {
+        throw new Error(`Supabase embedding error: ${error.message}`);
       }
 
-      const data = await response.json();
-      
-      if (!data.data || !data.data[0] || !data.data[0].embedding) {
-        throw new Error('Invalid response format from OpenAI API');
+      if (!data || !data.embeddings || !Array.isArray(data.embeddings) || data.embeddings.length === 0) {
+        throw new Error('Invalid response format from Supabase embedding function');
       }
+
+      const embedding = data.embeddings[0];
+      const tokens = data.usage?.total_tokens || this.estimateTokenCount(processedText);
+      
+      this.totalTokensUsed += tokens;
 
       const result: EmbeddingResult = {
-        embedding: data.data[0].embedding,
-        tokens: data.usage.total_tokens,
+        embedding: embedding,
+        tokens: tokens,
         model: this.MODEL,
       };
 
@@ -93,95 +89,174 @@ export class TextEmbeddingService {
    * Generate embeddings for multiple texts in batches
    */
   async generateBatchEmbeddings(texts: string[]): Promise<BatchEmbeddingResult> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-
     if (!texts || texts.length === 0) {
       return {
         successful: [],
         failed: [],
         totalTokens: 0,
-        totalCost: 0,
+        totalCost: 0, // Always 0 for Supabase embeddings
       };
     }
 
-    const result: BatchEmbeddingResult = {
-      successful: [],
-      failed: [],
-      totalTokens: 0,
-      totalCost: 0,
-    };
+    console.log(`Starting batch embedding generation for ${texts.length} texts`);
 
-    // Process in batches
-    for (let i = 0; i < texts.length; i += this.MAX_BATCH_SIZE) {
-      const batch = texts.slice(i, i + this.MAX_BATCH_SIZE);
-      const batchResult = await this.processBatch(batch, i);
+    const successful: Array<{ index: number; embedding: number[]; tokens: number }> = [];
+    const failed: Array<{ index: number; error: string; content: string }> = [];
+    let totalTokens = 0;
+
+    // Process in smaller batches to avoid overwhelming the system
+    const batchSize = Math.min(this.MAX_BATCH_SIZE, 20);
+    
+    for (let i = 0; i < texts.length; i += batchSize) {
+      const batch = texts.slice(i, i + batchSize);
+      const batchIndices = Array.from({ length: batch.length }, (_, idx) => i + idx);
       
-      result.successful.push(...batchResult.successful);
-      result.failed.push(...batchResult.failed);
-      result.totalTokens += batchResult.totalTokens;
+      try {
+        // Filter out empty or invalid texts
+        const validTexts = batch.filter(text => text && typeof text === 'string' && text.trim().length > 0);
+        const validIndices = batchIndices.filter((_, idx) => {
+          const text = batch[idx];
+          return text && typeof text === 'string' && text.trim().length > 0;
+        });
 
-      // Rate limiting delay between batches
-      if (i + this.MAX_BATCH_SIZE < texts.length) {
-        await this.delay(this.RATE_LIMIT_DELAY);
+        if (validTexts.length === 0) {
+          // Mark all as failed
+          batch.forEach((text, idx) => {
+            failed.push({
+              index: batchIndices[idx],
+              error: 'Empty or invalid text',
+              content: text || ''
+            });
+          });
+          continue;
+        }
+
+        // Call Supabase function for batch
+        const { data, error } = await supabase.functions.invoke('supabase-embeddings', {
+          body: {
+            texts: validTexts,
+            model: this.MODEL,
+            options: {
+              normalize: true,
+              truncate: true
+            }
+          }
+        });
+
+        if (error) {
+          console.error('Supabase batch embedding error:', error);
+          // Mark all as failed
+          validTexts.forEach((text, idx) => {
+            failed.push({
+              index: validIndices[idx],
+              error: `Supabase error: ${error.message}`,
+              content: text.substring(0, 100)
+            });
+          });
+          continue;
+        }
+
+        if (data && data.embeddings && Array.isArray(data.embeddings)) {
+          // Process successful embeddings
+          data.embeddings.forEach((embedding: number[], idx: number) => {
+            if (idx < validIndices.length) {
+              const tokens = this.estimateTokenCount(validTexts[idx]);
+              successful.push({
+                index: validIndices[idx],
+                embedding: embedding,
+                tokens: tokens
+              });
+              totalTokens += tokens;
+            }
+          });
+        } else {
+          // Mark all as failed due to invalid response
+          validTexts.forEach((text, idx) => {
+            failed.push({
+              index: validIndices[idx],
+              error: 'Invalid response format',
+              content: text.substring(0, 100)
+            });
+          });
+        }
+
+        // Rate limiting delay between batches
+        if (i + batchSize < texts.length) {
+          await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_DELAY));
+        }
+
+      } catch (error: any) {
+        console.error(`Batch embedding error for indices ${i}-${i + batch.length - 1}:`, error);
+        
+        // Mark entire batch as failed
+        batch.forEach((text, idx) => {
+          failed.push({
+            index: batchIndices[idx],
+            error: error.message || 'Unknown error',
+            content: (text || '').substring(0, 100)
+          });
+        });
       }
     }
 
-    result.totalCost = this.calculateCost(result.totalTokens);
-    
-    console.log(`Batch embedding complete: ${result.successful.length} successful, ${result.failed.length} failed, ${result.totalTokens} tokens, $${result.totalCost.toFixed(4)} cost`);
-    
-    return result;
-  }
+    this.updateUsageStats(totalTokens);
 
-  /**
-   * Generate embeddings for vector content objects
-   */
-  async generateVectorEmbeddings(vectorContents: VectorContent[]): Promise<{
-    successful: Array<VectorContent & { embedding: number[] }>;
-    failed: Array<VectorContent & { error: string }>;
-    stats: {
-      totalProcessed: number;
-      successfulCount: number;
-      failedCount: number;
-      totalTokens: number;
-      totalCost: number;
-    };
-  }> {
-    const texts = vectorContents.map(vc => vc.contentText);
-    const batchResult = await this.generateBatchEmbeddings(texts);
-    
-    const successful: Array<VectorContent & { embedding: number[] }> = [];
-    const failed: Array<VectorContent & { error: string }> = [];
-
-    // Map successful embeddings back to vector content
-    batchResult.successful.forEach(({ index, embedding }) => {
-      successful.push({
-        ...vectorContents[index],
-        embedding,
-      });
-    });
-
-    // Map failed embeddings back to vector content
-    batchResult.failed.forEach(({ index, error }) => {
-      failed.push({
-        ...vectorContents[index],
-        error,
-      });
-    });
+    console.log(`Batch embedding completed: ${successful.length} successful, ${failed.length} failed`);
 
     return {
       successful,
       failed,
-      stats: {
-        totalProcessed: vectorContents.length,
-        successfulCount: successful.length,
-        failedCount: failed.length,
-        totalTokens: batchResult.totalTokens,
-        totalCost: batchResult.totalCost,
-      },
+      totalTokens,
+      totalCost: 0 // Always 0 for Supabase embeddings
     };
+  }
+
+  /**
+   * Process vector content items and generate embeddings
+   */
+  async processVectorContent(
+    contents: VectorContent[],
+    onProgress?: (current: number, total: number, currentItem?: VectorContent) => void,
+    onBatchComplete?: (batchIndex: number, totalBatches: number, successful: number, failed: number) => void
+  ): Promise<Array<VectorContent & { embedding?: number[]; error?: string }>> {
+    if (!contents || contents.length === 0) {
+      return [];
+    }
+
+    console.log(`Processing ${contents.length} vector content items`);
+
+    const results: Array<VectorContent & { embedding?: number[]; error?: string }> = [...contents];
+    const texts = contents.map(content => content.contentText);
+    
+    // Generate embeddings in batches
+    const batchResult = await this.generateBatchEmbeddings(texts);
+    
+    // Apply successful embeddings
+    batchResult.successful.forEach(({ index, embedding }) => {
+      if (index < results.length) {
+        results[index].embedding = embedding;
+      }
+    });
+
+    // Apply errors
+    batchResult.failed.forEach(({ index, error }) => {
+      if (index < results.length) {
+        results[index].error = error;
+      }
+    });
+
+    // Call progress callback with final stats
+    if (onProgress) {
+      onProgress(contents.length, contents.length);
+    }
+    
+    if (onBatchComplete) {
+      onBatchComplete(1, 1, batchResult.successful.length, batchResult.failed.length);
+    }
+
+    console.log(`Vector content processing completed: ${batchResult.successful.length} successful, ${batchResult.failed.length} failed`);
+
+    return results;
   }
 
   /**
@@ -215,142 +290,85 @@ export class TextEmbeddingService {
   }
 
   /**
+   * Preprocess text for optimal embedding generation
+   */
+  private preprocessText(text: string): string {
+    if (!text) return '';
+    
+    // Remove extra whitespace and normalize
+    let processed = text.trim().replace(/\s+/g, ' ');
+    
+    // Remove special characters that don't add semantic value
+    processed = processed.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Zero-width characters
+    
+    // Truncate if too long (optimize for embedding quality)
+    const maxWords = 500; // Reasonable limit for good embeddings
+    const words = processed.split(' ');
+    if (words.length > maxWords) {
+      processed = words.slice(0, maxWords).join(' ') + '...';
+    }
+    
+    return processed;
+  }
+
+  /**
+   * Estimate token count for usage tracking
+   */
+  private estimateTokenCount(text: string): number {
+    if (!text) return 0;
+    // Simple estimation: ~4 characters per token on average
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Update internal usage statistics
+   */
+  private updateUsageStats(tokens: number): void {
+    this.totalTokensUsed += tokens;
+  }
+
+  /**
    * Get usage statistics
    */
   getUsageStats() {
     return {
       requestCount: this.requestCount,
       totalTokensUsed: this.totalTokensUsed,
-      estimatedCost: this.calculateCost(this.totalTokensUsed),
-      averageTokensPerRequest: this.requestCount > 0 ? this.totalTokensUsed / this.requestCount : 0,
+      totalCost: 0, // Always 0 for Supabase embeddings
+      model: this.MODEL,
+      embeddingDimensions: this.EMBEDDING_DIMENSIONS
     };
   }
 
   /**
    * Reset usage statistics
    */
-  resetUsageStats() {
+  resetUsageStats(): void {
     this.requestCount = 0;
     this.totalTokensUsed = 0;
   }
 
-  // Private helper methods
-
-  private async processBatch(texts: string[], startIndex: number): Promise<BatchEmbeddingResult> {
-    const processedTexts = texts.map(text => this.preprocessText(text));
-    
-    try {
-      const response = await fetch(this.OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: this.MODEL,
-          input: processedTexts,
-          encoding_format: 'float',
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = `OpenAI API error: ${response.status} - ${errorData.error?.message || response.statusText}`;
-        
-        // Mark all texts in this batch as failed
-        const failed = texts.map((text, index) => ({
-          index: startIndex + index,
-          error: errorMessage,
-          content: text.substring(0, 100) + '...',
-        }));
-
-        return {
-          successful: [],
-          failed,
-          totalTokens: 0,
-          totalCost: 0,
-        };
-      }
-
-      const data = await response.json();
-      
-      if (!data.data || !Array.isArray(data.data)) {
-        throw new Error('Invalid response format from OpenAI API');
-      }
-
-      const successful = data.data.map((item: any, index: number) => ({
-        index: startIndex + index,
-        embedding: item.embedding,
-        tokens: Math.floor(data.usage.total_tokens / data.data.length), // Approximate tokens per item
-      }));
-
-      this.updateUsageStats(data.usage.total_tokens);
-
-      return {
-        successful,
-        failed: [],
-        totalTokens: data.usage.total_tokens,
-        totalCost: this.calculateCost(data.usage.total_tokens),
-      };
-    } catch (error) {
-      console.error('Error processing batch:', error);
-      
-      // Mark all texts in this batch as failed
-      const failed = texts.map((text, index) => ({
-        index: startIndex + index,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        content: text.substring(0, 100) + '...',
-      }));
-
-      return {
-        successful: [],
-        failed,
-        totalTokens: 0,
-        totalCost: 0,
-      };
-    }
-  }
-
-  private preprocessText(text: string): string {
-    if (!text) return '';
-    
-    // Remove excessive whitespace
-    let processed = text.replace(/\s+/g, ' ').trim();
-    
-    // Remove special characters that might cause issues
-    processed = processed.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-    
-    // Truncate if too long (approximate token count = characters / 4)
-    const maxChars = this.MAX_TOKENS * 4;
-    if (processed.length > maxChars) {
-      processed = processed.substring(0, maxChars - 3) + '...';
-    }
-    
-    return processed;
-  }
-
-  private updateUsageStats(tokens: number) {
-    this.requestCount++;
-    this.totalTokensUsed += tokens;
-  }
-
-  private calculateCost(tokens: number): number {
-    return (tokens / 1000) * this.COST_PER_1K_TOKENS;
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  /**
+   * Check if service is properly configured
+   */
+  isConfigured(): boolean {
+    // Since we're using Supabase, always return true
+    return true;
   }
 
   /**
-   * Validate that an embedding array is valid
+   * Get service configuration info
    */
-  validateEmbedding(embedding: number[]): boolean {
-    if (!Array.isArray(embedding)) return false;
-    if (embedding.length !== 1536) return false; // ada-002 dimension
-    
-    // Check for NaN or infinite values
-    return embedding.every(val => typeof val === 'number' && isFinite(val));
+  getConfigInfo() {
+    return {
+      service: 'Supabase Native Embeddings',
+      model: this.MODEL,
+      dimensions: this.EMBEDDING_DIMENSIONS,
+      maxTokens: this.MAX_TOKENS,
+      maxBatchSize: this.MAX_BATCH_SIZE,
+      costPerRequest: 0,
+      configured: this.isConfigured()
+    };
   }
 
   /**

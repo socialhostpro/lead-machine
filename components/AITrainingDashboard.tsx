@@ -317,7 +317,27 @@ export const AITrainingDashboard: React.FC<AITrainingDashboardProps> = ({ compan
       {/* Pipeline Configuration */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">⚙️ Pipeline Configuration</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Embedding Service
+              </label>
+              <div className="text-sm text-slate-600 dark:text-slate-400">
+                <strong className="text-green-600 dark:text-green-400">✅ Supabase Native</strong> - No API keys required, free embeddings
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Embedding Model
+              </label>
+              <div className="text-sm text-slate-600 dark:text-slate-400">
+                <strong>gte-small (384 dimensions)</strong> - Optimized for semantic search
+              </div>
+            </div>
+          </div>
+          
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -350,12 +370,24 @@ export const AITrainingDashboard: React.FC<AITrainingDashboardProps> = ({ compan
             
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Processing Mode
+                Cost Per Request
               </label>
               <div className="text-sm text-slate-600 dark:text-slate-400">
-                <strong>Batch Processing</strong> - Efficient bulk processing of all leads
+                <strong className="text-green-600 dark:text-green-400">$0.00</strong> - Free with Supabase hosting
               </div>
             </div>
+          </div>
+        </div>
+        
+        {/* Additional Info */}
+        <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+            <span><strong>Migration Complete:</strong> Successfully migrated from OpenAI to Supabase native embeddings</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 mt-2">
+            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+            <span><strong>No API Costs:</strong> All embedding generation is handled by Supabase infrastructure</span>
           </div>
         </div>
       </div>

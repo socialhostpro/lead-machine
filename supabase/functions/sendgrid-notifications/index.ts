@@ -151,6 +151,57 @@ ${message}
 Action Required: Please log into your Lead Machine dashboard to respond to this message.
 Dashboard: https://leads.imaginecapital.ai
       `
+    } else if (type === 'lead_info') {
+      const { subject: customSubject, message, leadName, leadEmail, leadPhone, leadCompany, leadSource, leadStatus, leadId } = messageData
+      
+      subject = customSubject || `Lead Information: ${leadName}`
+      htmlContent = `
+        <h2>Lead Information Summary</h2>
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3>Lead Details:</h3>
+          <p><strong>Name:</strong> ${leadName}</p>
+          <p><strong>Email:</strong> ${leadEmail}</p>
+          <p><strong>Phone:</strong> ${leadPhone}</p>
+          <p><strong>Company:</strong> ${leadCompany || 'Not provided'}</p>
+          <p><strong>Source:</strong> ${leadSource}</p>
+          <p><strong>Status:</strong> ${leadStatus}</p>
+          <p><strong>Lead ID:</strong> ${leadId}</p>
+        </div>
+        <div style="background-color: #ffffff; padding: 20px; border-left: 4px solid #0066cc; margin: 20px 0;">
+          <h3>Complete Information:</h3>
+          <pre style="white-space: pre-wrap; font-family: Arial, sans-serif; font-size: 14px;">${message}</pre>
+        </div>
+        <div style="margin-top: 30px; padding: 15px; background-color: #e8f4f8; border-radius: 5px;">
+          <p><strong>Dashboard Access:</strong> Manage this lead and others in your dashboard.</p>
+          <p><a href="https://leads.imaginecapital.ai" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View in Dashboard</a></p>
+        </div>
+      `
+      textContent = `
+Lead Information Summary
+
+Lead Details:
+Name: ${leadName}
+Email: ${leadEmail}
+Phone: ${leadPhone}
+Company: ${leadCompany || 'Not provided'}
+Source: ${leadSource}
+Status: ${leadStatus}
+Lead ID: ${leadId}
+
+Complete Information:
+${message}
+
+Dashboard Access: Manage this lead and others in your dashboard.
+Dashboard: https://leads.imaginecapital.ai
+      `
+    } else {
+      // Handle unrecognized email types
+      throw new Error(`Unsupported email type: ${type}. Supported types are: test_email, new_message, lead_info`);
+    }
+
+    // Validate that email content was properly set
+    if (!subject || !htmlContent || !textContent) {
+      throw new Error(`Email content not properly generated for type: ${type}`);
     }
 
     // Prepare SendGrid email payload with custom email settings
@@ -191,8 +242,13 @@ Dashboard: https://leads.imaginecapital.ai
 
     if (!sendgridResponse.ok) {
       const errorText = await sendgridResponse.text()
-      console.error('SendGrid API Error:', errorText)
-      throw new Error(`SendGrid API error: ${sendgridResponse.status}`)
+      console.error('SendGrid API Error:', {
+        status: sendgridResponse.status,
+        statusText: sendgridResponse.statusText,
+        errorText: errorText,
+        headers: Object.fromEntries(sendgridResponse.headers.entries())
+      })
+      throw new Error(`SendGrid API error (${sendgridResponse.status}): ${errorText || sendgridResponse.statusText}`)
     }
 
     return new Response(
@@ -225,8 +281,17 @@ Dashboard: https://leads.imaginecapital.ai
     } else if (error.message.includes('SendGrid API error')) {
       errorMessage = `SendGrid service error: ${error.message}`;
       statusCode = 502;
+    } else if (error.message.includes('Unsupported email type')) {
+      errorMessage = `Invalid email type: ${error.message}`;
+      statusCode = 400;
+    } else if (error.message.includes('Email content not properly generated')) {
+      errorMessage = `Email generation failed: ${error.message}`;
+      statusCode = 500;
     } else if (error.message.includes('JSON')) {
       errorMessage = 'Invalid request format';
+      statusCode = 400;
+    } else if (error.message.includes('Missing required fields')) {
+      errorMessage = `Invalid request: ${error.message}`;
       statusCode = 400;
     }
     
