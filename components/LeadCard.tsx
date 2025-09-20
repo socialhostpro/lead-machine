@@ -6,6 +6,7 @@ import CollapsibleSection from './CollapsibleSection';
 import ConfirmationModal from './ConfirmationModal';
 import ElevenLabsAudioPlayer from './ElevenLabsAudioPlayer';
 import EmailModal from './EmailModal';
+import { getTimeBasedStatus, getTimeBasedColorClass, formatTimeDifference } from '../utils/callerTracking';
 
 interface LeadCardProps {
   lead: Lead;
@@ -321,6 +322,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
       return 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/20';
   };
 
+  // Calculate time-based status and colors
+  const lastContactTime = lead.lastContactTime || lead.callDetails?.callStartTime || lead.createdAt;
+  const timeBasedStatus = getTimeBasedStatus(lastContactTime);
+  const cardBackgroundClass = getTimeBasedColorClass(timeBasedStatus, lead.status);
+  const timeDifferenceText = formatTimeDifference(lastContactTime);
+
   // Helper function to display email properly
   const getDisplayEmail = (email: string) => {
     if (!email || email === 'N/A' || email.startsWith('conv_') || email.includes('@imported-lead.com')) {
@@ -340,7 +347,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
 
   return (
     <>
-      <div id={`lead-card-${lead.id}`} className={`bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-800 flex flex-col gap-4 transition-all duration-500 overflow-hidden ${isHighlighted ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-slate-50 dark:dark:ring-offset-slate-900' : ''}`}>
+      <div id={`lead-card-${lead.id}`} className={`${cardBackgroundClass} p-4 rounded-lg shadow-md dark:shadow-lg border flex flex-col gap-4 transition-all duration-500 overflow-hidden ${isHighlighted ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-slate-50 dark:ring-offset-slate-900' : ''}`}>
         {/* Header */}
         <div className="flex justify-between items-start min-w-0">
           <div className="flex-1 min-w-0 pr-4">
@@ -354,8 +361,11 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
               </p>
             )}
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex flex-col gap-2 items-end">
             <StatusBadge status={lead.status} />
+            <div className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+              {timeDifferenceText}
+            </div>
           </div>
         </div>
 

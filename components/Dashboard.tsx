@@ -2,8 +2,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Lead, LeadStatus, Company, User, UserRole, Note } from '../types';
 import ActivityFeed from './ActivityFeed';
 import LeadCard from './LeadCard';
+import ReturningCallerStack from './ReturningCallerStack';
 import { PlusIcon, MagnifyingGlassIcon, ChevronDownIcon, Cog6ToothIcon, UserCircleIcon, SunIcon, MoonIcon, ArrowPathIcon, UsersIcon, ClockIcon, ArrowDownTrayIcon, ArrowLeftOnRectangleIcon, ClipboardIcon } from './icons';
 import Pagination from './Pagination';
+import { groupReturningCallers, calculateCallerTracking } from '../utils/callerTracking';
 
 interface DashboardProps {
   leads: Lead[];
@@ -40,7 +42,7 @@ const StatCard: React.FC<{ title: string; value: number; color: string }> = ({ t
   </div>
 );
 
-const TABS: (LeadStatus | 'All')[] = ['All', ...Object.values(LeadStatus)];
+const TABS: (LeadStatus | 'All')[] = ['All', LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.CLIENT, LeadStatus.LOST, LeadStatus.ARCHIVE, LeadStatus.UNQUALIFIED];
 
 const SORT_OPTIONS = {
   'callDate_desc': 'Latest Caller First',
@@ -172,14 +174,35 @@ const Dashboard: React.FC<DashboardProps> = ({
     return filteredLeads;
   }, [leads, activeTab, searchQuery, sortOption, showOnlyWithPhone]);
 
+  // Group returning callers and prepare display data
+  const groupedLeads = useMemo(() => {
+    // Calculate caller tracking for all leads
+    const leadsWithTracking = filteredAndSortedLeads.map(lead => ({
+      ...lead,
+      callerTracking: calculateCallerTracking(leads, lead),
+      lastContactTime: lead.lastContactTime || lead.callDetails?.callStartTime || lead.createdAt
+    }));
+
+    // Group returning callers
+    const { returningGroups, singleCallers } = groupReturningCallers(leadsWithTracking);
+    
+    // Combine groups and single callers for display
+    const displayItems: (Lead | Lead[])[] = [
+      ...returningGroups,
+      ...singleCallers
+    ];
+    
+    return displayItems;
+  }, [filteredAndSortedLeads, leads]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, searchQuery, sortOption, showOnlyWithPhone]);
 
-  const paginatedLeads = useMemo(() => {
+  const paginatedItems = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredAndSortedLeads.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredAndSortedLeads, currentPage]);
+    return groupedLeads.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [groupedLeads, currentPage]);
 
   const getTabCount = (tab: LeadStatus | 'All') => {
     if (tab === 'All') return leads.length;
@@ -413,14 +436,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div className="flex justify-center items-center py-16">
                         <ArrowPathIcon className="w-8 h-8 text-teal-500 animate-spin" />
                     </div>
-                ) : paginatedLeads.length > 0 ? (
+                ) : paginatedItems.length > 0 ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0">
-                        {paginatedLeads.map(lead => (
-                            <div key={lead.id} className="min-w-0">
-                                <LeadCard 
-                                    lead={lead}
-                                    isHighlighted={lead.id === highlightedLeadId}
+                        {paginatedItems.map((item, index) => (
+                            <div key={Array.isArray(item) ? `group-${item[0].phone}-${index}` : item.id} className="min-w-0">
+                                {Array.isArray(item) ? (
+                                  // Returning caller group
+                                  <ReturningCallerStack
+                                    callerGroup={item}
                                     elevenlabsApiKey={elevenlabsApiKey}
                                     onUpdateLead={onUpdateLead}
                                     onDeleteLead={onDeleteLead}
@@ -433,13 +457,32 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     companyId={currentCompany.id}
                                     onOpenDetailedInsights={onOpenDetailedInsights}
                                     onOpenActivityModal={onOpenActivityModal}
-                                />
+                                  />
+                                ) : (
+                                  // Single lead
+                                  <LeadCard 
+                                      lead={item}
+                                      isHighlighted={item.id === highlightedLeadId}
+                                      elevenlabsApiKey={elevenlabsApiKey}
+                                      onUpdateLead={onUpdateLead}
+                                      onDeleteLead={onDeleteLead}
+                                      onOpenEditModal={onOpenEditModal}
+                                      onOpenAddNoteModal={onOpenAddNoteModal}
+                                      onSendToWebhook={onSendToWebhook}
+                                      onGenerateInsights={onGenerateInsights}
+                                      onSendEmail={onSendEmail}
+                                      userEmail={currentUser.email}
+                                      companyId={currentCompany.id}
+                                      onOpenDetailedInsights={onOpenDetailedInsights}
+                                      onOpenActivityModal={onOpenActivityModal}
+                                  />
+                                )}
                             </div>
                         ))}
                     </div>
                     <Pagination
                         currentPage={currentPage}
-                        totalItems={filteredAndSortedLeads.length}
+                        totalItems={groupedLeads.length}
                         itemsPerPage={ITEMS_PER_PAGE}
                         onPageChange={setCurrentPage}
                     />

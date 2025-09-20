@@ -12,6 +12,9 @@ export enum LeadStatus {
   CONTACTED = 'Contacted',
   QUALIFIED = 'Qualified',
   UNQUALIFIED = 'Unqualified',
+  CLIENT = 'Client',
+  LOST = 'Lost', 
+  ARCHIVE = 'Archive',
   CLOSED_WON = 'Closed - Won',
   CLOSED_LOST = 'Closed - Lost',
 }
@@ -30,6 +33,23 @@ export interface CallDetails {
   transcriptSummary: string;
   callStartTime?: string; // ISO timestamp from ElevenLabs start_time_unix_secs
   callDuration?: number;  // Duration in seconds
+}
+
+export interface CallerTracking {
+  totalCalls: number;
+  callsToday: number;
+  callsThisWeek: number;
+  lastContactTime?: string; // ISO timestamp of last contact
+  isReturning: boolean;
+}
+
+export enum TimeBasedStatus {
+  JUST_CALLED = 'just_called',
+  HOURS_5 = 'hours_5',
+  HOURS_10 = 'hours_10', 
+  HOURS_24 = 'hours_24',
+  HOURS_48 = 'hours_48',
+  NEVER_CONTACTED = 'never_contacted'
 }
 
 export interface Company {
@@ -84,6 +104,8 @@ export interface Lead {
   callDetails?: CallDetails;
   issueDescription?: string;
   aiInsights?: AIInsights | null;
+  callerTracking?: CallerTracking;
+  lastContactTime?: string; // For time-based color coding
 }
 
 export enum UserRole {
