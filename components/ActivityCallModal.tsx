@@ -306,13 +306,13 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6">
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Left Column - Contact Info */}
             <div className="space-y-4">
               {/* Contact Information */}
-              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">Contact Information</h3>
+              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 sm:p-4">
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-3">Contact Information</h3>
                 <div className="space-y-3">
                   {/* Name */}
                   {!isUnknownIncomingCall && (
@@ -375,16 +375,19 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
                         </button>
                         <button
                           onClick={handleDialNumber}
-                          className={`p-2 rounded-lg font-medium transition-colors flex items-center space-x-2 flex-shrink-0 ${
+                          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-medium transition-colors flex items-center space-x-1 sm:space-x-2 flex-shrink-0 text-xs sm:text-sm ${
                             isCallActive 
                               ? 'bg-red-600 hover:bg-red-700 text-white' 
                               : 'bg-green-600 hover:bg-green-700 text-white'
                           }`}
                           title={isCallActive ? 'End Call' : 'Dial Number'}
                         >
-                          <PhoneOutgoingIcon className="w-4 h-4" />
-                          <span className="text-sm">
+                          <PhoneOutgoingIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="hidden sm:inline">
                             {isCallActive ? 'End Call' : 'Dial'}
+                          </span>
+                          <span className="sm:hidden">
+                            {isCallActive ? 'End' : 'Call'}
                           </span>
                         </button>
                       </div>
@@ -513,9 +516,9 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
             <div className="space-y-4">
               {/* Issue Description */}
               {lead.issueDescription && (
-                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">Issue Description</h3>
-                  <p className="text-slate-800 dark:text-white whitespace-pre-wrap">{lead.issueDescription}</p>
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 sm:p-4">
+                  <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-3">Issue Description</h3>
+                  <p className="text-sm sm:text-base text-slate-800 dark:text-white whitespace-pre-wrap leading-relaxed">{lead.issueDescription}</p>
                 </div>
               )}
 
@@ -670,70 +673,75 @@ const ActivityCallModal: React.FC<ActivityCallModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="border-t border-slate-200 dark:border-slate-700 p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row gap-3 sm:justify-between">
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="border-t border-slate-200 dark:border-slate-700 p-3 sm:p-6">
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={() => onOpenEditModal(lead)}
-                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-xs sm:text-sm"
               >
-                <PencilIcon className="w-4 h-4" />
+                <PencilIcon className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span>Edit</span>
               </button>
               
               <button
                 onClick={() => onOpenAddNoteModal(lead)}
-                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-xs sm:text-sm"
               >
-                <ChatBubbleLeftIcon className="w-4 h-4" />
-                <span>Add Note</span>
+                <ChatBubbleLeftIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>Note</span>
               </button>
 
               {isValidEmail(lead.email) && onSendEmail && (
                 <button
                   onClick={handleEmailClick}
                   disabled={isSendingEmail}
-                  className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-lg transition-colors text-sm"
+                  className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-lg transition-colors text-xs sm:text-sm"
                 >
-                  <EnvelopeIcon className="w-4 h-4" />
-                  <span>{isSendingEmail ? 'Sending...' : 'Send Email'}</span>
+                  <EnvelopeIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">{isSendingEmail ? 'Sending...' : 'Email'}</span>
+                  <span className="sm:hidden">📧</span>
                 </button>
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={handleContactAction}
-                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors text-sm"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors text-xs sm:text-sm"
               >
-                <PhoneIcon className="w-4 h-4" />
-                <span>Mark Contacted</span>
+                <PhoneIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Mark Contacted</span>
+                <span className="sm:hidden">Contact</span>
               </button>
 
               <button
                 onClick={handleWebhookClick}
                 disabled={isSendingWebhook}
-                className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition-colors text-sm"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition-colors text-xs sm:text-sm"
               >
-                <PaperAirplaneIcon className="w-4 h-4" />
-                <span>{isSendingWebhook ? 'Sending...' : 'Send Webhook'}</span>
+                <PaperAirplaneIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">{isSendingWebhook ? 'Sending...' : 'Webhook'}</span>
+                <span className="sm:hidden">📤</span>
               </button>
 
               <button
                 onClick={handleGenerateInsightsClick}
                 disabled={isGeneratingInsights}
-                className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-300 text-white rounded-lg transition-colors"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-300 text-white rounded-lg transition-colors text-xs sm:text-sm"
               >
-                <LightBulbIcon className="w-4 h-4" />
-                <span>{isGeneratingInsights ? 'Generating...' : 'AI Insights'}</span>
+                <LightBulbIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">{isGeneratingInsights ? 'Generating...' : 'AI Insights'}</span>
+                <span className="sm:hidden">🤖</span>
               </button>
 
               <button
                 onClick={handleDownload}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-2 sm:px-4 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-xs sm:text-sm"
               >
-                <ArrowDownTrayIcon className="w-4 h-4" />
-                <span>Download</span>
+                <ArrowDownTrayIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Download</span>
+                <span className="sm:hidden">📥</span>
               </button>
             </div>
           </div>
