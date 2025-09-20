@@ -360,7 +360,7 @@ const App: React.FC = () => {
           
           const { data: insertedLeads, error: insertError } = await supabase
             .from('leads')
-            .insert(newLeadsData)
+            .upsert(newLeadsData, { onConflict: 'source_conversation_id' })
             .select();
           
           if (!insertError && insertedLeads) {
@@ -576,7 +576,7 @@ const App: React.FC = () => {
             return toSupabase(leadForConversion);
           });            const { data: insertedLeads, error: insertError } = await supabase
               .from('leads')
-              .insert(newLeadsData)
+              .upsert(newLeadsData, { onConflict: 'source_conversation_id' })
               .select();
             
             if (!insertError && insertedLeads) {
