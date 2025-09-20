@@ -649,7 +649,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, elevenlabsApiKey, onUpdateLea
                 </CollapsibleSection>
             )}
              {lead.callDetails && (
-                <CollapsibleSection title="Call Details" initiallyOpen={true}>
+                <CollapsibleSection title="Call Details" initiallyOpen={false}>
                     <div className="space-y-3">
                         <h4 className="font-semibold text-teal-700 dark:text-teal-300">{lead.callDetails.summaryTitle}</h4>
                         {lead.hasAudio && elevenlabsApiKey ? (

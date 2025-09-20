@@ -306,20 +306,30 @@ const App: React.FC = () => {
             let phone = 'N/A';
             
             if (conv.summary_title) {
-              const nameMatch = conv.summary_title.match(/^([A-Za-z]+)\s+([A-Za-z]+)/);
+              // Improved regex to handle titles (Dr., Mr., etc.) and apostrophes
+              const nameMatch = conv.summary_title.match(/^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|Mrs\.\s+)?([A-Za-z]+(?:'[A-Za-z]+)?)\s+([A-Za-z]+(?:'[A-Za-z]+)?)(?:\s|$)/);
               if (nameMatch) {
                 firstName = nameMatch[1];
                 lastName = nameMatch[2];
               } else {
-                // If no full name match, use the whole title as lastName
-                lastName = conv.summary_title;
-                firstName = 'Unknown';
+                // Check for single name with title
+                const singleNameMatch = conv.summary_title.match(/^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|Mrs\.\s+)?([A-Za-z]+(?:'[A-Za-z]+)?)$/);
+                if (singleNameMatch) {
+                  firstName = singleNameMatch[1];
+                  lastName = 'Caller';
+                } else {
+                  // If no name pattern matches, check if it looks like a name (only contains letters and spaces)
+                  if (/^[A-Za-z\s']+$/.test(conv.summary_title) && conv.summary_title.length <= 50) {
+                    lastName = conv.summary_title;
+                    firstName = 'Unknown';
+                  }
+                }
               }
             } else if (conv.transcript_summary) {
-              // Try to extract name from transcript summary
-              const nameMatch = conv.transcript_summary.match(/(?:caller|user|customer)\s+(?:named\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
+              // Improved regex for transcript extraction
+              const nameMatch = conv.transcript_summary.match(/(?:caller|user|customer)(?:\s+is|\s+named)?\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
               if (nameMatch) {
-                const fullName = nameMatch[1].split(' ');
+                const fullName = nameMatch[1].trim().split(/\s+/);
                 firstName = fullName[0];
                 lastName = fullName[1] || 'Caller';
               }
@@ -526,20 +536,30 @@ const App: React.FC = () => {
             let phone = 'N/A';
             
             if (conv.summary_title) {
-              const nameMatch = conv.summary_title.match(/^([A-Za-z]+)\s+([A-Za-z]+)/);
+              // Improved regex to handle titles (Dr., Mr., etc.) and apostrophes
+              const nameMatch = conv.summary_title.match(/^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|Mrs\.\s+)?([A-Za-z]+(?:'[A-Za-z]+)?)\s+([A-Za-z]+(?:'[A-Za-z]+)?)(?:\s|$)/);
               if (nameMatch) {
                 firstName = nameMatch[1];
                 lastName = nameMatch[2];
               } else {
-                // If no full name match, use the whole title as lastName
-                lastName = conv.summary_title;
-                firstName = 'Unknown';
+                // Check for single name with title
+                const singleNameMatch = conv.summary_title.match(/^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|Mrs\.\s+)?([A-Za-z]+(?:'[A-Za-z]+)?)$/);
+                if (singleNameMatch) {
+                  firstName = singleNameMatch[1];
+                  lastName = 'Caller';
+                } else {
+                  // If no name pattern matches, check if it looks like a name (only contains letters and spaces)
+                  if (/^[A-Za-z\s']+$/.test(conv.summary_title) && conv.summary_title.length <= 50) {
+                    lastName = conv.summary_title;
+                    firstName = 'Unknown';
+                  }
+                }
               }
             } else if (conv.transcript_summary) {
-              // Try to extract name from transcript summary
-              const nameMatch = conv.transcript_summary.match(/(?:caller|user|customer)\s+(?:named\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
+              // Improved regex for transcript extraction
+              const nameMatch = conv.transcript_summary.match(/(?:caller|user|customer)(?:\s+is|\s+named)?\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)/i);
               if (nameMatch) {
-                const fullName = nameMatch[1].split(' ');
+                const fullName = nameMatch[1].trim().split(/\s+/);
                 firstName = fullName[0];
                 lastName = fullName[1] || 'Caller';
               }
