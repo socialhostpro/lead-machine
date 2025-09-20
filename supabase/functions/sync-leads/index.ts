@@ -20,6 +20,7 @@ interface LeadData {
   source_conversation_id?: string
   ai_insights?: object
   notes: any[]
+  created_at?: string
 }
 
 serve(async (req) => {
@@ -79,9 +80,10 @@ serve(async (req) => {
       )
     }
 
-    // Fetch conversations from ElevenLabs
+    // Fetch conversations from ElevenLabs - try without agent_id filter first
+    console.log('Fetching ALL conversations from ElevenLabs...')
     const conversationsResponse = await fetch(
-      `https://api.elevenlabs.io/v1/convai/conversations?agent_id=${company.default_agent_id}&summary_mode=include`,
+      `https://api.elevenlabs.io/v1/convai/conversations?summary_mode=include`,
       {
         headers: {
           'xi-api-key': elevenLabsApiKey,
@@ -98,6 +100,20 @@ serve(async (req) => {
 
     const elevenLabsData = await conversationsResponse.json()
     const conversations = elevenLabsData.conversations || []
+    
+    // DEBUG: Log all conversations with timestamps
+    console.log('=== ALL ELEVENLABS CONVERSATIONS ===')
+    console.log(`Agent ID: ${company.default_agent_id}`)
+    conversations.forEach((conv: any, index: number) => {
+      const callTime = new Date(conv.start_time_unix_secs * 1000)
+      console.log(`${index + 1}. Conv ID: ${conv.conversation_id}`)
+      console.log(`   Start Time: ${callTime.toLocaleString()} (Unix: ${conv.start_time_unix_secs})`)
+      console.log(`   Duration: ${conv.duration_secs || 'N/A'} seconds`)
+      console.log(`   Status: ${conv.status || 'N/A'}`)
+      console.log(`   ---`)
+    })
+    console.log(`Total conversations found: ${conversations.length}`)
+    console.log('=== END DEBUG ===')
 
     // Get existing leads from database
     const { data: existingLeads, error: leadsError } = await supabaseClient
@@ -147,7 +163,9 @@ serve(async (req) => {
       const issueDescription = getVal('description') || null
 
       if (!existingLead) {
-        // Create new lead
+        // Create new lead with proper timestamp from ElevenLabs
+        const callTimestamp = new Date(conv.start_time_unix_secs * 1000).toISOString()
+        
         const newLead: LeadData = {
           id: conv.conversation_id,
           company_id: profile.company_id,
@@ -164,7 +182,7 @@ serve(async (req) => {
           notes: []
         }
         
-        newLeads.push(newLead)
+        newLeads.push({ ...newLead, created_at: callTimestamp } as any)
       } else {
         // Check if existing lead needs updates
         const hasChanges = 

@@ -1,0 +1,1 @@
+SELECT id, name, default_agent_id FROM companies;

@@ -248,112 +248,38 @@ const App: React.FC = () => {
     
     try {
       console.log('🔄 Background ElevenLabs sync started...');
-      const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/elevenlabs-conversations`, {
+      const syncResponse = await fetch(`${SUPABASE_URL}/functions/v1/sync-leads`, {
+          method: 'POST',
           headers: { 
             'Authorization': `Bearer ${session?.access_token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({})
       });
       
-      if (listResponse.ok) {
-        const elevenLabsData = await listResponse.json();
-        const conversations = elevenLabsData.conversations || [];
-        console.log(`📞 Background sync found ${conversations.length} conversations`);
-        console.log('🔍 Conversation IDs found:', conversations.map((c: any) => c.conversation_id));
+      if (syncResponse.ok) {
+        const syncResult = await syncResponse.json();
+        console.log(`✅ Sync completed: ${syncResult.newLeads} new leads, ${syncResult.updatedLeads} updated`);
         
-        // Get current database leads to check for new ones
-        const { data: databaseLeads } = await supabase
+        // Force refresh leads data after sync
+        const { data: freshLeads } = await supabase
           .from('leads')
           .select('*')
           .eq('company_id', currentCompany.id)
           .order('created_at', { ascending: false });
         
-        const existingConversationIds = new Set(
-          (databaseLeads || [])
-            .filter(l => l.source === LeadSource.INCOMING_CALL && l.source_conversation_id)
-            .map(l => l.source_conversation_id)
-        );
-        
-        const newConversations = conversations.filter((conv: any) => 
-          !existingConversationIds.has(conv.conversation_id)
-        );
-        
-        if (newConversations.length > 0) {
-          console.log(`💾 Saving ${newConversations.length} new conversations to database`);
-          
-          const newLeadsData = newConversations.map((conv: any) => {
-            // Convert ElevenLabs timestamp to proper date
-            const callTime = new Date(conv.start_time_unix_secs * 1000);
-            
-            const leadForConversion: Omit<Lead, 'id' | 'createdAt'> = {
-              companyId: currentCompany.id,
-              firstName: 'Unknown',
-              lastName: `Call (${callTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-              company: '',
-              email: `${conv.conversation_id}@imported-lead.com`,
-              phone: 'N/A',
-              status: LeadStatus.NEW,
-              notes: [],
-              source: LeadSource.INCOMING_CALL,
-              callDetails: {
-                conversationId: conv.conversation_id,
-                summaryTitle: 'ElevenLabs Conversation',
-                transcriptSummary: conv.transcript_summary || 'ElevenLabs conversation'
-              },
-              issueDescription: conv.transcript_summary || 'ElevenLabs conversation',
-              hasAudio: conv.has_audio || false,
-              aiInsights: null
-            };
-            return toSupabase(leadForConversion);
-          });
-          
-          const { data: insertedLeads, error: insertError } = await supabase
-            .from('leads')
-            .insert(newLeadsData)
-            .select();
-          
-          if (!insertError && insertedLeads) {
-            console.log(`✅ Successfully saved ${insertedLeads.length} new leads to database`);
-            console.log('📋 Saved lead IDs:', insertedLeads.map(l => l.id));
-            
-            // Update UI with new leads if currently viewing leads
-            const newFrontendLeads = insertedLeads.map(fromSupabase);
-            setLeads(prev => [...newFrontendLeads, ...prev]);
-            
-            // Play sound notification
-            if (currentUser) {
-              const soundPreferences = {
-                enabled: currentUser.sound_notifications_enabled ?? true,
-                volume: currentUser.notification_volume ?? 0.7,
-                newLeadSound: currentUser.new_lead_sound ?? 'notification',
-                emailSound: currentUser.email_sound ?? 'email'
-              };
-              
-              if (newFrontendLeads.length === 1) {
-                await playNewLeadSound(soundPreferences);
-              } else if (newFrontendLeads.length > 1) {
-                await playNewLeadSound(soundPreferences);
-                console.log(`🔔 ${newFrontendLeads.length} new leads detected!`);
-              }
-            }
-          } else if (insertError) {
-            console.error('❌ Error saving new leads:', insertError);
-            console.error('💥 Failed to save leads data:', newLeadsData.map(l => ({ id: l.source_conversation_id, email: l.email })));
-          }
-        } else {
-          console.log('✅ No new conversations found');
+        if (freshLeads) {
+          const frontendLeads = freshLeads.map(fromSupabase);
+          setLeads(frontendLeads);
+          console.log(`🔄 Refreshed leads: ${frontendLeads.length} total leads`);
         }
       } else {
-        const errorText = await listResponse.text();
-        console.error(`🚨 ElevenLabs sync failed with status ${listResponse.status}:`, errorText);
-        console.error('🔑 Session token:', session?.access_token ? 'Present' : 'Missing');
-        console.error('🏢 Company ID:', currentCompany?.id);
+        console.error('❌ Sync failed:', await syncResponse.text());
       }
     } catch (error) {
-      console.error('🚨 Background ElevenLabs sync failed:', error);
+      console.error('🚨 ElevenLabs sync error:', error);
     }
-  }, [session, currentCompany, currentUser]);
-
+  }, [session, currentCompany]);
   // Set up background sync interval (every 5 minutes)
   useEffect(() => {
     if (!session || !currentCompany) return;
@@ -542,6 +468,19 @@ const App: React.FC = () => {
     // Update cache timestamp
     localStorage.setItem(cacheKey, now.toString());
   }, [currentCompany, session]);
+
+  // Manual refresh that includes ElevenLabs sync
+  const refreshLeadsWithSync = useCallback(async () => {
+    console.log('🔄 Manual refresh with ElevenLabs sync...');
+    
+    // First trigger ElevenLabs sync
+    await syncElevenLabsInBackground();
+    
+    // Then fetch fresh data (force refresh)
+    await fetchLeads(true);
+    
+    console.log('✅ Manual refresh with sync completed');
+  }, [syncElevenLabsInBackground, fetchLeads]);
 
   const fetchForms = useCallback(async () => {
     if (!currentCompanyId) return;
@@ -939,7 +878,7 @@ const App: React.FC = () => {
         onOpenProfile={() => setProfileModalOpen(true)}
         onOpenForms={() => setFormsModalOpen(true)}
         onToggleTheme={toggleTheme}
-        onRefreshLeads={fetchLeads}
+        onRefreshLeads={refreshLeadsWithSync}
         onOpenUserManagement={() => setUserManagementModalOpen(true)}
         onUpdateLead={handleUpdateLead}
         onDeleteLead={handleDeleteLead}
